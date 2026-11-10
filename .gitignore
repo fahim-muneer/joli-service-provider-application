@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+venv/
+.env
+.env.*
+
+# Keep example environment files
+!.env.example
+!**/.env.example
+
+# Django
+staticfiles/
+media/
+
+# React / Node
+node_modules/
+dist/
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
