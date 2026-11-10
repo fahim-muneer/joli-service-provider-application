@@ -1,0 +1,11 @@
+{
+  "installation": {
+    "version": "24.0.5",
+    "plugins": {
+      "@nx/eslint": "24.0.5",
+      "@nx/vite": "24.0.5"
+    }
+  },
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "analytics": true
+}

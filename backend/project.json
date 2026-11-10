@@ -1,0 +1,24 @@
+{
+  "name": "backend",
+  "projectType": "application",
+  "targets": {
+    "serve": {
+      "command": "bash -c 'source venv/bin/activate && python manage.py runserver'",
+      "options": {
+        "cwd": "backend"
+      }
+    },
+    "migrate": {
+      "command": "bash -c 'source venv/bin/activate && python manage.py migrate'",
+      "options": {
+        "cwd": "backend"
+      }
+    },
+    "test": {
+      "command": "bash -c 'source venv/bin/activate && python manage.py test'",
+      "options": {
+        "cwd": "backend"
+      }
+    }
+  }
+}

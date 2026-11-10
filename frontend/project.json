@@ -1,0 +1,19 @@
+{
+  "name": "frontend",
+  "projectType": "application",
+  "sourceRoot": "frontend/src",
+  "targets": {
+    "dev": {
+      "command": "npm run dev",
+      "options": {
+        "cwd": "frontend"
+      }
+    },
+    "build": {
+      "command": "npm run build",
+      "options": {
+        "cwd": "frontend"
+      }
+    }
+  }
+}
