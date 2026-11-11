@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.authentication.models import PasswordResetToken
+from apps.authentication.models import OneTimeCode
 from apps.providers.models import ProviderProfile
 
 User = get_user_model()
@@ -314,9 +314,12 @@ class PasswordResetTests(APITestCase):
         cache.clear()  # throttle counters live in the cache
         self.client.post(reverse("register-customer"), payload(), format="json")
 
+    def codes(self):
+        return OneTimeCode.objects.filter(purpose=OneTimeCode.Purpose.PASSWORD_RESET)
+
     def request_code(self, phone=None):
         """Request a code; returns (response, otp or None)."""
-        with mock.patch("apps.authentication.services.send_password_reset_otp") as sender:
+        with mock.patch("apps.authentication.services.send_otp") as sender:
             with self.captureOnCommitCallbacks(execute=True):
                 res = self.client.post(
                     reverse("password-reset-request"),
@@ -363,15 +366,15 @@ class PasswordResetTests(APITestCase):
 
     def test_code_is_stored_hashed(self):
         _, otp, _ = self.request_code()
-        token = PasswordResetToken.objects.get()
-        self.assertNotIn(otp, token.token_hash)
-        self.assertEqual(len(token.token_hash), 64)
+        token = self.codes().get()
+        self.assertNotIn(otp, token.code_hash)
+        self.assertEqual(len(token.code_hash), 64)
 
     def test_wrong_code_counts_an_attempt_and_right_code_still_works(self):
         _, otp, _ = self.request_code()
         wrong = "000000" if otp != "000000" else "111111"
         self.assertEqual(self.confirm(wrong).status_code, 400)
-        self.assertEqual(PasswordResetToken.objects.get().attempts, 1)  # committed, not rolled back
+        self.assertEqual(self.codes().get().attempts, 1)  # committed, not rolled back
         self.assertEqual(self.confirm(otp).status_code, 200)
 
     def test_code_is_locked_after_max_attempts(self):
@@ -384,7 +387,7 @@ class PasswordResetTests(APITestCase):
 
     def test_expired_code_rejected(self):
         _, otp, _ = self.request_code()
-        PasswordResetToken.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.codes().update(expires_at=timezone.now() - timedelta(seconds=1))
         self.assertEqual(self.confirm(otp).status_code, 400)
 
     def test_code_is_single_use(self):
@@ -397,7 +400,7 @@ class PasswordResetTests(APITestCase):
         res = self.confirm(otp, new_password="123")
         self.assertEqual(res.status_code, 400)
         self.assertIn("new_password", res.data)
-        self.assertEqual(PasswordResetToken.objects.get().attempts, 0)
+        self.assertEqual(self.codes().get().attempts, 0)
         self.assertEqual(self.confirm(otp).status_code, 200)
 
     def test_password_mismatch_rejected(self):
@@ -415,7 +418,7 @@ class PasswordResetTests(APITestCase):
         _, first, sender = self.request_code()
         _, ignored, sender2 = self.request_code()          # within cooldown: ignored
         self.assertFalse(sender2.called)
-        PasswordResetToken.objects.update(created_at=timezone.now() - timedelta(minutes=2))
+        self.codes().update(created_at=timezone.now() - timedelta(minutes=2))
         _, second, _ = self.request_code()
         self.assertIsNotNone(second)
         if second != first:
@@ -443,3 +446,226 @@ class PasswordResetTests(APITestCase):
         codes = [self.request_code()[0].status_code for _ in range(6)]
         self.assertEqual(codes[:5], [200] * 5)
         self.assertEqual(codes[5], 429)
+
+
+class PhoneVerificationTests(APITestCase):
+    PHONE = "+919876543210"
+
+    def setUp(self):
+        cache.clear()
+
+    def codes(self):
+        return OneTimeCode.objects.filter(purpose=OneTimeCode.Purpose.PHONE_VERIFICATION)
+
+    def register(self, url_name="register-customer", **extra):
+        """Register and return the code that would have been SMSed."""
+        with mock.patch("apps.authentication.services.send_otp") as sender:
+            with self.captureOnCommitCallbacks(execute=True):
+                res = self.client.post(reverse(url_name), payload(**extra), format="json")
+        self.assertEqual(res.status_code, 201)
+        return sender.call_args.args[1] if sender.called else None, sender
+
+    def login(self):
+        res = self.client.post(
+            reverse("login"), {"phone": self.PHONE, "password": PW}, format="json"
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {res.data['access']}")
+
+    def resend(self):
+        with mock.patch("apps.authentication.services.send_otp") as sender:
+            with self.captureOnCommitCallbacks(execute=True):
+                res = self.client.post(reverse("verify-phone-send"), format="json")
+        return res, (sender.call_args.args[1] if sender.called else None)
+
+    def confirm(self, otp):
+        return self.client.post(reverse("verify-phone-confirm"), {"otp": otp}, format="json")
+
+    def is_verified(self):
+        return User.objects.get(phone=self.PHONE).is_phone_verified
+
+    def test_registration_sends_a_verification_code(self):
+        otp, sender = self.register()
+        self.assertEqual(sender.call_count, 1)
+        self.assertEqual(sender.call_args.args[2], "phone_verification")
+        self.assertRegex(otp, r"^\d{6}$")
+        self.assertFalse(self.is_verified())
+
+    def test_provider_registration_also_sends_a_code(self):
+        otp, sender = self.register("register-provider", email="p@example.com")
+        self.assertIsNotNone(otp)
+
+    def test_failed_registration_sends_nothing(self):
+        with mock.patch("apps.authentication.services.send_otp") as sender:
+            with self.captureOnCommitCallbacks(execute=True):
+                res = self.client.post(
+                    reverse("register-customer"), payload(phone="12345"), format="json"
+                )
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(sender.called)
+        self.assertFalse(OneTimeCode.objects.exists())
+
+    def test_unverified_user_can_still_log_in(self):
+        self.register()
+        res = self.client.post(
+            reverse("login"), {"phone": self.PHONE, "password": PW}, format="json"
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(res.data["user"]["is_phone_verified"])
+
+    def test_full_verification_flow(self):
+        otp, _ = self.register()
+        self.login()
+        res = self.confirm(otp)
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.data["user"]["is_phone_verified"])
+        self.assertTrue(self.is_verified())
+
+    def test_endpoints_require_authentication(self):
+        self.register()
+        self.assertEqual(self.client.post(reverse("verify-phone-send")).status_code, 401)
+        self.assertEqual(self.confirm("123456").status_code, 401)
+
+    def test_wrong_code_counts_an_attempt(self):
+        otp, _ = self.register()
+        self.login()
+        wrong = "000000" if otp != "000000" else "111111"
+        self.assertEqual(self.confirm(wrong).status_code, 400)
+        self.assertEqual(self.codes().get().attempts, 1)  # committed, not rolled back
+        self.assertEqual(self.confirm(otp).status_code, 200)
+
+    def test_code_is_locked_after_max_attempts(self):
+        otp, _ = self.register()
+        self.login()
+        wrong = "000000" if otp != "000000" else "111111"
+        for _ in range(5):
+            self.assertEqual(self.confirm(wrong).status_code, 400)
+        self.assertEqual(self.confirm(otp).status_code, 400)
+        self.assertFalse(self.is_verified())
+
+    def test_expired_code_rejected(self):
+        otp, _ = self.register()
+        self.login()
+        self.codes().update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(self.confirm(otp).status_code, 400)
+        self.assertFalse(self.is_verified())
+
+    def test_malformed_code_rejected(self):
+        self.register()
+        self.login()
+        for bad in ["12345", "1234567", "abcdef", ""]:
+            self.assertEqual(self.confirm(bad).status_code, 400, bad)
+
+    def test_code_is_stored_hashed(self):
+        otp, _ = self.register()
+        code = self.codes().get()
+        self.assertNotIn(otp, code.code_hash)
+        self.assertEqual(len(code.code_hash), 64)
+
+    def test_resend_is_throttled_then_replaces_the_old_code(self):
+        first, _ = self.register()
+        self.login()
+        res, _ = self.resend()
+        self.assertEqual(res.status_code, 429)  # inside the 60 s cooldown
+        self.codes().update(created_at=timezone.now() - timedelta(minutes=2))
+        res, second = self.resend()
+        self.assertEqual(res.status_code, 200)
+        if second != first:
+            self.assertEqual(self.confirm(first).status_code, 400)  # old code is dead
+        self.assertEqual(self.confirm(second).status_code, 200)
+
+    def test_already_verified_user(self):
+        otp, _ = self.register()
+        self.login()
+        self.confirm(otp)
+        res, _ = self.resend()
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(self.confirm("000000").status_code, 200)  # idempotent
+        self.assertTrue(self.is_verified())
+
+    def test_codes_for_different_purposes_do_not_mix(self):
+        self.register()
+        # request a password-reset code for the same user
+        with mock.patch("apps.authentication.services.send_otp") as sender:
+            with self.captureOnCommitCallbacks(execute=True):
+                self.client.post(
+                    reverse("password-reset-request"), {"phone": self.PHONE}, format="json"
+                )
+        reset_otp = sender.call_args.args[1]
+        self.login()
+        self.assertEqual(self.confirm(reset_otp).status_code, 400)
+        self.assertFalse(self.is_verified())
+
+
+class ChangePasswordTests(APITestCase):
+    PHONE = "+919876543210"
+    NEW_PW = "An0ther-Str0ng-Pw!"
+
+    def setUp(self):
+        cache.clear()
+        self.client.post(reverse("register-customer"), payload(), format="json")
+        self.tokens = self.login(PW)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.tokens['access']}")
+
+    def login(self, password):
+        res = self.client.post(
+            reverse("login"), {"phone": self.PHONE, "password": password}, format="json"
+        )
+        return res.data if res.status_code == 200 else res.status_code
+
+    def change(self, **overrides):
+        data = {
+            "old_password": PW,
+            "new_password": self.NEW_PW,
+            "new_password_confirm": self.NEW_PW,
+            **overrides,
+        }
+        return self.client.post(reverse("change-password"), data, format="json")
+
+    def refresh(self, token):
+        return self.client.post(reverse("token-refresh"), {"refresh": token}, format="json")
+
+    def test_success_switches_the_password(self):
+        res = self.change()
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.login(PW), 401)
+        self.assertNotEqual(self.login(self.NEW_PW), 401)
+
+    def test_other_sessions_are_ended_but_the_current_device_gets_new_tokens(self):
+        other_device = self.login(PW)
+        res = self.change()
+        self.assertEqual(self.refresh(self.tokens["refresh"]).status_code, 401)
+        self.assertEqual(self.refresh(other_device["refresh"]).status_code, 401)
+        self.assertEqual(self.refresh(res.data["refresh"]).status_code, 200)
+        new_access = {"HTTP_AUTHORIZATION": f"Bearer {res.data['access']}"}
+        self.assertEqual(self.client.get(reverse("profile"), **new_access).status_code, 200)
+
+    def test_wrong_current_password(self):
+        res = self.change(old_password="not-my-password")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("old_password", res.data)
+        self.assertNotEqual(self.login(PW), 401)  # unchanged
+
+    def test_new_password_must_differ(self):
+        res = self.change(new_password=PW, new_password_confirm=PW)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("new_password", res.data)
+
+    def test_weak_new_password_rejected(self):
+        res = self.change(new_password="123", new_password_confirm="123")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("new_password", res.data)
+        self.assertNotEqual(self.login(PW), 401)
+
+    def test_confirmation_mismatch_rejected(self):
+        res = self.change(new_password_confirm="something-else")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("new_password_confirm", res.data)
+
+    def test_requires_authentication(self):
+        self.client.credentials()
+        self.assertEqual(self.change().status_code, 401)
+
+    def test_guessing_the_current_password_is_throttled(self):
+        for _ in range(10):
+            self.assertEqual(self.change(old_password="wrong-guess").status_code, 400)
+        self.assertEqual(self.change(old_password="wrong-guess").status_code, 429)

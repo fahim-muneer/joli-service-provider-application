@@ -175,3 +175,22 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
                 {"new_password_confirm": "Passwords do not match."}
             )
         return attrs
+
+
+class PhoneVerificationConfirmSerializer(serializers.Serializer):
+    otp = serializers.RegexField(
+        r"^\d{6}$", error_messages={"invalid": "Enter the 6-digit code."}
+    )
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+    new_password_confirm = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["new_password_confirm"]:
+            raise serializers.ValidationError(
+                {"new_password_confirm": "Passwords do not match."}
+            )
+        return attrs
