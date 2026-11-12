@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from apps.services.models import Service
+
 
 class ProviderProfile(models.Model):
     class ApprovalStatus(models.TextChoices):
@@ -49,3 +51,51 @@ class ProviderProfile(models.Model):
 
     def __str__(self):
         return f"{self.business_name or self.user.full_name} ({self.approval_status})"
+
+
+class ProviderService(models.Model):
+    """A service a provider offers, with their own price and duration."""
+
+    provider = models.ForeignKey(
+        ProviderProfile, on_delete=models.CASCADE, related_name="provider_services"
+    )
+    service = models.ForeignKey(
+        "services.Service", on_delete=models.PROTECT, related_name="provider_services"
+    )
+    custom_price = models.DecimalField(max_digits=10, decimal_places=2)
+    pricing_type = models.CharField(max_length=12, choices=Service.PricingType.choices)
+    estimated_duration_minutes = models.PositiveIntegerField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "provider_services"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "service"], name="uniq_provider_service"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.provider_id} offers {self.service_id}"
+
+
+class ProviderArea(models.Model):
+    """An area a provider is willing to travel to."""
+
+    provider = models.ForeignKey(
+        ProviderProfile, on_delete=models.CASCADE, related_name="service_areas"
+    )
+    area = models.ForeignKey(
+        "locations.Area", on_delete=models.PROTECT, related_name="provider_areas"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "provider_areas"
+        constraints = [
+            models.UniqueConstraint(fields=["provider", "area"], name="uniq_provider_area")
+        ]
+
+    def __str__(self):
+        return f"{self.provider_id} covers {self.area_id}"

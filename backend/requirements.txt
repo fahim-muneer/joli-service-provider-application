@@ -8,6 +8,7 @@ djangorestframework_simplejwt==5.5.1
 isort==9.0.2
 mccabe==0.7.0
 mypy_extensions==1.2.0
+pillow==13.0.0
 platformdirs==4.14.5
 psycopg==3.3.8
 psycopg-binary==3.3.8
