@@ -1,10 +1,14 @@
 from django.db.models import Q
-from rest_framework import generics, viewsets
-from rest_framework.exceptions import ValidationError
+from django.utils import timezone
+from rest_framework import generics, serializers, viewsets
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 
 from apps.locations.pagination import StandardPagination
+from apps.locations.models import Area
 from apps.locations.selectors import get_active_city
+from apps.providers import selectors as provider_selectors
+from apps.providers.serializers import PublicProviderOfferSerializer
 from apps.users.permissions import IsAdminRole
 
 from . import selectors
@@ -83,6 +87,60 @@ class ServiceDetailView(_PublicMixin, generics.RetrieveAPIView):
         context = super().get_serializer_context()
         context["city_id"] = city_id_from_request(self.request)
         return context
+
+
+def area_id_from_request(request, city_id):
+    """Reads ?area=<id>. 400 when malformed/unknown, or when it is not in ?city=."""
+    raw = request.query_params.get("area")
+    if raw in (None, ""):
+        return None
+    if not raw.isdigit():
+        raise ValidationError({"area": "Must be an area id."})
+    area = Area.objects.filter(pk=int(raw), is_active=True, city__is_active=True).first()
+    if area is None:
+        raise ValidationError({"area": "Area not found."})
+    if city_id is not None and area.city_id != city_id:
+        raise ValidationError({"area": "This area is not in the selected city."})
+    return area.pk
+
+
+def scheduled_at_from_request(request):
+    """Reads ?scheduled_at=2026-11-20T10:00:00+05:30 (a time without an offset is
+    taken in the server's time zone). Must be in the future."""
+    raw = request.query_params.get("scheduled_at")
+    if not raw:
+        return None
+    try:
+        value = serializers.DateTimeField().to_internal_value(raw)
+    except serializers.ValidationError:
+        raise ValidationError({"scheduled_at": "Use a date and time like 2026-11-20T10:00:00."})
+    if value <= timezone.now():
+        raise ValidationError({"scheduled_at": "Must be in the future."})
+    return value
+
+
+class ServiceProviderListView(_PublicMixin, generics.ListAPIView):
+    """Who can do this job? GET /<service id>/providers/?city=&area=&scheduled_at=&ordering=
+
+    With scheduled_at (the customer's chosen date and time) only providers who are
+    free then are returned: the matching step before booking.
+    ordering: price | -price | experience | -experience (default: online first, then cheapest)."""
+
+    serializer_class = PublicProviderOfferSerializer
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        if not selectors.service_queryset().filter(pk=self.kwargs["pk"]).exists():
+            raise NotFound("Service not found.")
+        city_id = city_id_from_request(self.request)
+        area_id = area_id_from_request(self.request, city_id)
+        ordering = self.request.query_params.get("ordering")
+        if ordering and ordering not in provider_selectors._OFFER_ORDERING:
+            raise ValidationError({"ordering": f"Use one of {sorted(provider_selectors._OFFER_ORDERING)}."})
+        return provider_selectors.offers_for_service(
+            self.kwargs["pk"], city_id=city_id, area_id=area_id, ordering=ordering,
+            available_at=scheduled_at_from_request(self.request),
+        )
 
 
 # ------------------------- admin portal -------------------------

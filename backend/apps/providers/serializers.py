@@ -9,6 +9,7 @@ from apps.services.models import Service
 from . import selectors
 from .models import (
     ProviderArea,
+    ProviderAvailability,
     ProviderDocument,
     ProviderProfile,
     ProviderService,
@@ -208,3 +209,106 @@ class DocumentReviewSerializer(serializers.Serializer):
     decision = serializers.ChoiceField(choices=["approved", "rejected"])
     reason = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
     remark = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
+
+
+# ------------------------- availability -------------------------
+
+class AvailabilityWindowSerializer(serializers.ModelSerializer):
+    date = serializers.DateField(source="available_date", read_only=True)
+
+    class Meta:
+        model = ProviderAvailability
+        fields = ["id", "date", "start_time", "end_time", "is_available"]
+        read_only_fields = fields
+
+
+class AvailabilityCreateSerializer(serializers.Serializer):
+    """Send `date` (one day) or `dates` (up to 62 days) with the same hours."""
+
+    date = serializers.DateField(required=False)
+    dates = serializers.ListField(
+        child=serializers.DateField(), min_length=1, max_length=62, required=False
+    )
+    start_time = serializers.TimeField()
+    end_time = serializers.TimeField()
+    is_available = serializers.BooleanField(default=True)
+
+    def validate(self, attrs):
+        has_one, has_many = "date" in attrs, "dates" in attrs
+        if has_one == has_many:
+            raise serializers.ValidationError("Send exactly one of: date, dates.")
+        if has_one:
+            attrs["dates"] = [attrs.pop("date")]
+        return attrs
+
+
+class AvailabilityUpdateSerializer(serializers.Serializer):
+    start_time = serializers.TimeField(required=False)
+    end_time = serializers.TimeField(required=False)
+    is_available = serializers.BooleanField(required=False)
+
+
+class OnlineToggleSerializer(serializers.Serializer):
+    is_available = serializers.BooleanField()
+
+
+# ------------------------- public (customer-facing) -------------------------
+
+def _display_name(provider):
+    return provider.business_name or provider.user.full_name
+
+
+class PublicProviderOfferSerializer(serializers.ModelSerializer):
+    """One provider's offer for one service. No phone or email is ever exposed."""
+
+    provider = serializers.IntegerField(source="provider_id", read_only=True)
+    display_name = serializers.SerializerMethodField()
+    bio = serializers.CharField(source="provider.bio", read_only=True)
+    experience_years = serializers.IntegerField(source="provider.experience_years", read_only=True)
+    languages = serializers.ListField(source="provider.languages", read_only=True)
+    is_online = serializers.BooleanField(source="provider.is_available", read_only=True)
+    price = serializers.DecimalField(
+        source="custom_price", max_digits=10, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        model = ProviderService
+        fields = [
+            "id", "provider", "display_name", "bio", "experience_years", "languages",
+            "is_online", "price", "pricing_type", "estimated_duration_minutes",
+        ]
+        read_only_fields = fields
+
+    def get_display_name(self, obj):
+        return _display_name(obj.provider)
+
+
+class PublicProviderServiceSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="service.name", read_only=True)
+    category_name = serializers.CharField(source="service.category.name", read_only=True)
+    price = serializers.DecimalField(
+        source="custom_price", max_digits=10, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        model = ProviderService
+        fields = ["id", "service", "name", "category_name", "price", "pricing_type", "estimated_duration_minutes"]
+        read_only_fields = fields
+
+
+class PublicProviderSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+    is_online = serializers.BooleanField(source="is_available", read_only=True)
+    services = PublicProviderServiceSerializer(source="live_services", many=True, read_only=True)
+    areas = ProviderAreaSerializer(source="live_areas", many=True, read_only=True)
+
+    class Meta:
+        model = ProviderProfile
+        fields = [
+            "id", "display_name", "bio", "experience_years", "languages",
+            "is_online", "services", "areas",
+        ]
+        read_only_fields = fields
+
+    def get_display_name(self, obj):
+        return _display_name(obj)

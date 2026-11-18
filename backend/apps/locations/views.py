@@ -1,12 +1,14 @@
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework import generics, status, viewsets
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from apps.users.permissions import IsAdminRole
+from apps.users.permissions import IsAdminRole, IsCustomerRole
 
-from . import selectors
+from . import selectors, services
 from .models import Area, City
 from .pagination import StandardPagination
 from .serializers import (
@@ -14,6 +16,7 @@ from .serializers import (
     AdminCitySerializer,
     AreaPublicSerializer,
     CityPublicSerializer,
+    CustomerAddressSerializer,
 )
 
 
@@ -104,3 +107,52 @@ class AdminAreaViewSet(_ArchiveOnDeleteMixin, viewsets.ModelViewSet):
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(pincode__icontains=search))
         return qs
+
+
+# ------------------------- customer addresses -------------------------
+
+class _CustomerView(APIView):
+    permission_classes = [IsCustomerRole]
+
+    def get_address(self):
+        address = selectors.get_address(self.request.user, self.kwargs["pk"])
+        if address is None:
+            raise NotFound("Address not found.")
+        return address
+
+
+class AddressListCreateView(_CustomerView):
+    """GET my saved addresses (default first). POST a new one: the first address
+    is made the default automatically."""
+
+    def get(self, request):
+        addresses = selectors.list_addresses(request.user)
+        return Response(CustomerAddressSerializer(addresses, many=True).data)
+
+    def post(self, request):
+        serializer = CustomerAddressSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        address = services.create_address(user=request.user, **serializer.validated_data)
+        return Response(CustomerAddressSerializer(address).data, status=status.HTTP_201_CREATED)
+
+
+class AddressDetailView(_CustomerView):
+    def get(self, request, pk):
+        return Response(CustomerAddressSerializer(self.get_address()).data)
+
+    def patch(self, request, pk):
+        address = self.get_address()
+        serializer = CustomerAddressSerializer(address, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        address = services.update_address(address=address, **serializer.validated_data)
+        return Response(CustomerAddressSerializer(address).data)
+
+    def delete(self, request, pk):
+        services.archive_address(address=self.get_address())
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AddressDefaultView(_CustomerView):
+    def post(self, request, pk):
+        address = services.update_address(address=self.get_address(), is_default=True)
+        return Response(CustomerAddressSerializer(address).data)

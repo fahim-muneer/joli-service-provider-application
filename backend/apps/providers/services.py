@@ -1,4 +1,6 @@
 """All provider writes and the approval workflow live here."""
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -8,6 +10,7 @@ from apps.locations.models import Area
 from . import selectors
 from .models import (
     ProviderArea,
+    ProviderAvailability,
     ProviderDocument,
     ProviderProfile,
     ProviderService,
@@ -228,3 +231,82 @@ def replace_areas(*, profile, area_ids) -> None:
     ProviderArea.objects.bulk_create(
         [ProviderArea(provider=profile, area_id=pk) for pk in sorted(valid - existing)]
     )
+
+
+# ---------------------------------------------------------------------------
+# Availability: online switch + schedule
+# ---------------------------------------------------------------------------
+
+MAX_DAYS_AHEAD = 90
+
+
+@transaction.atomic
+def set_online(*, profile, online: bool) -> ProviderProfile:
+    profile = _lock(profile)
+    if online and profile.approval_status != Status.APPROVED:
+        raise ValidationError({"detail": "Only approved providers can go online."})
+    profile.is_available = online
+    profile.save(update_fields=["is_available", "updated_at"])
+    return profile
+
+
+@transaction.atomic
+def add_windows(*, profile, dates, start_time, end_time, is_available=True):
+    """Create the same time window on one or more dates, all or nothing."""
+    if end_time <= start_time:
+        raise ValidationError({"end_time": "Must be after start_time."})
+    profile = _lock(profile)  # serialise concurrent edits of one provider's schedule
+    today = timezone.localdate()
+    last_day = today + timedelta(days=MAX_DAYS_AHEAD)
+    unique = sorted(set(dates))
+    problems = []
+    for day in unique:
+        if day < today:
+            problems.append(f"{day}: this date is in the past.")
+        elif day > last_day:
+            problems.append(f"{day}: more than {MAX_DAYS_AHEAD} days ahead.")
+        elif selectors.overlapping_windows(
+            profile, day, start_time, end_time, is_available=is_available
+        ).exists():
+            problems.append(f"{day}: overlaps an existing window.")
+    if problems:
+        raise ValidationError({"dates": problems})
+    ProviderAvailability.objects.bulk_create(
+        [
+            ProviderAvailability(
+                provider=profile, available_date=day, start_time=start_time,
+                end_time=end_time, is_available=is_available,
+            )
+            for day in unique
+        ]
+    )
+    return list(
+        ProviderAvailability.objects.filter(
+            provider=profile, available_date__in=unique, start_time=start_time,
+            end_time=end_time, is_available=is_available,
+        )
+    )
+
+
+@transaction.atomic
+def update_window(*, window, start_time=None, end_time=None, is_available=None):
+    profile = _lock(window.provider)
+    if window.available_date < timezone.localdate():
+        raise ValidationError({"detail": "A window in the past cannot be changed."})
+    new_start = start_time if start_time is not None else window.start_time
+    new_end = end_time if end_time is not None else window.end_time
+    new_flag = window.is_available if is_available is None else is_available
+    if new_end <= new_start:
+        raise ValidationError({"end_time": "Must be after start_time."})
+    if selectors.overlapping_windows(
+        profile, window.available_date, new_start, new_end,
+        is_available=new_flag, exclude_pk=window.pk,
+    ).exists():
+        raise ValidationError({"detail": "This overlaps another window of the same kind."})
+    window.start_time, window.end_time, window.is_available = new_start, new_end, new_flag
+    window.save()
+    return window
+
+
+def delete_window(*, window) -> None:
+    window.delete()

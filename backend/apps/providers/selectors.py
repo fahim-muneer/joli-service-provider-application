@@ -8,11 +8,15 @@ A service is AVAILABLE IN A CITY when at least one provider
 (`ProviderProfile.is_available` is the provider's online/offline toggle. It is
 for matching at booking time, so it deliberately does not hide catalogue items.)
 """
-from django.db.models import Count, Exists, OuterRef, Q
+from collections import defaultdict
+from datetime import timedelta
+
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from .models import (
     ProviderArea,
+    ProviderAvailability,
     ProviderDocument,
     ProviderProfile,
     ProviderService,
@@ -160,4 +164,134 @@ def provider_detail_queryset():
         "provider_services__service__category",
         "service_areas__area__city",
         "status_history__changed_by",
+    )
+
+
+# ------------------------- availability schedule -------------------------
+
+def list_windows(profile, *, date_from=None, date_to=None):
+    """The provider's windows from `date_from` (default: today) onward."""
+    qs = ProviderAvailability.objects.filter(
+        provider=profile, available_date__gte=date_from or timezone.localdate()
+    )
+    if date_to:
+        qs = qs.filter(available_date__lte=date_to)
+    return qs
+
+
+def get_window(profile, pk) -> ProviderAvailability | None:
+    return ProviderAvailability.objects.filter(provider=profile, pk=pk).first()
+
+
+def overlapping_windows(profile, date, start, end, *, is_available, exclude_pk=None):
+    """Windows of the same kind on that date that overlap [start, end)."""
+    qs = ProviderAvailability.objects.filter(
+        provider=profile,
+        available_date=date,
+        is_available=is_available,
+        start_time__lt=end,
+        end_time__gt=start,
+    )
+    return qs.exclude(pk=exclude_pk) if exclude_pk else qs
+
+
+def _window_fits(windows, start, minutes) -> bool:
+    """`windows`: one provider's windows for the day of `start` (a naive local datetime).
+    True if a working window fully contains the job and no blocked window touches it."""
+    end = start + timedelta(minutes=minutes)
+    if end.date() != start.date():
+        return False  # no overnight jobs
+    s, e = start.time(), end.time()
+    if any((not w.is_available) and w.start_time < e and s < w.end_time for w in windows):
+        return False
+    return any(w.is_available and w.start_time <= s and e <= w.end_time for w in windows)
+
+
+def _to_local(dt):
+    return timezone.localtime(dt) if timezone.is_aware(dt) else dt
+
+
+def is_within_availability(profile, start_dt, minutes) -> bool:
+    """Can this provider take a job starting at `start_dt` and lasting `minutes`?
+    (Booking uses this later; it does not look at existing bookings yet.)"""
+    start = _to_local(start_dt)
+    windows = list(
+        ProviderAvailability.objects.filter(provider=profile, available_date=start.date())
+    )
+    return _window_fits(windows, start, minutes)
+
+
+def filter_offers_available_at(offers, start_dt):
+    """Keep only the offers whose provider can do the job at `start_dt`, using each
+    offer's own duration. Two queries, however many providers there are; the
+    queryset's ordering is preserved."""
+    start = _to_local(start_dt)
+    rows = list(offers.values_list("pk", "provider_id", "estimated_duration_minutes"))
+    windows = defaultdict(list)
+    for w in ProviderAvailability.objects.filter(
+        provider_id__in={provider_id for _, provider_id, _ in rows}, available_date=start.date()
+    ):
+        windows[w.provider_id].append(w)
+    keep = [pk for pk, provider_id, minutes in rows if _window_fits(windows[provider_id], start, minutes)]
+    return offers.filter(pk__in=keep)
+
+
+# ------------------------- customer-facing provider listing -------------------------
+
+_OFFER_ORDERING = {
+    "price": ["custom_price", "id"],
+    "-price": ["-custom_price", "id"],
+    "experience": ["provider__experience_years", "id"],
+    "-experience": ["-provider__experience_years", "id"],
+}
+DEFAULT_OFFER_ORDERING = ["-provider__is_available", "custom_price", "id"]  # online first, cheapest first
+
+
+def offers_for_service(service_id, *, city_id=None, area_id=None, ordering=None, available_at=None):
+    """Live provider offers for one service, optionally limited to those who cover
+    an area (or any area of a city) and, with `available_at`, to those who are free
+    at that date and time. `ordering` must be a key of _OFFER_ORDERING."""
+    qs = live_provider_services().filter(service_id=service_id).select_related("provider__user")
+    if area_id is not None:
+        qs = qs.filter(
+            Exists(
+                ProviderArea.objects.filter(
+                    provider=OuterRef("provider"), area_id=area_id, area__is_active=True
+                )
+            )
+        )
+    elif city_id is not None:
+        qs = qs.filter(
+            Exists(
+                ProviderArea.objects.filter(
+                    provider=OuterRef("provider"), area__city_id=city_id, area__is_active=True
+                )
+            )
+        )
+    qs = qs.order_by(*(_OFFER_ORDERING.get(ordering) or DEFAULT_OFFER_ORDERING))
+    if available_at is not None:
+        qs = filter_offers_available_at(qs, available_at)
+    return qs
+
+
+def get_public_provider(pk) -> ProviderProfile | None:
+    """An approved provider with only their live services and active areas attached."""
+    return (
+        ProviderProfile.objects.filter(pk=pk, approval_status=Status.APPROVED)
+        .select_related("user")
+        .prefetch_related(
+            Prefetch(
+                "provider_services",
+                queryset=live_provider_services().select_related("service", "service__category"),
+                to_attr="live_services",
+            ),
+            Prefetch(
+                "service_areas",
+                queryset=ProviderArea.objects.filter(
+                    area__is_active=True, area__city__is_active=True
+                ).select_related("area", "area__city"),
+                to_attr="live_areas",
+            ),
+        )
+        .first()
     )

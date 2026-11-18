@@ -1,7 +1,7 @@
 """Read-only queries for locations."""
 from apps.providers import selectors as provider_selectors
 
-from .models import City
+from .models import City, CustomerAddress
 
 
 def get_active_city(city_id) -> City | None:
@@ -19,3 +19,13 @@ def list_cities(*, available_only: bool = False):
 
 def list_areas(city: City):
     return city.areas.filter(is_active=True)
+
+
+def list_addresses(user):
+    return CustomerAddress.objects.filter(user=user, is_active=True).select_related(
+        "area", "area__city"
+    )
+
+
+def get_address(user, pk) -> CustomerAddress | None:
+    return list_addresses(user).filter(pk=pk).first()

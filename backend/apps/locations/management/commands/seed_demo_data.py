@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.locations.models import Area, City
@@ -10,6 +11,9 @@ CITIES = {
     ("Bengaluru", "Karnataka"): [("Indiranagar", "560038"), ("Koramangala", "560034")],
     ("Chennai", "Tamil Nadu"): [("Adyar", "600020"), ("T Nagar", "600017")],
 }
+
+# Artwork keys (see frontend/src/assets/figma/README.md): the frontend shows icon-<key> / banner-<key>.
+CATEGORY_ICONS = {"Plumbing": "plumber", "Electrical": "electrician", "Cleaning": "cleaning"}
 
 CATALOG = {
     "Plumbing": [
@@ -23,8 +27,13 @@ CATALOG = {
     "Cleaning": [("Deep home cleaning", "fixed", "1999.00", 180)],
 }
 
+User = get_user_model()
+
+DEMO_PASSWORD = "Demo@12345"
 APPROVED_PHONE = "+919100000001"
 PENDING_PHONE = "+919100000002"
+CUSTOMER_PHONE = "+919100000003"
+ADMIN_PHONE = "+919100000010"
 
 
 class Command(BaseCommand):
@@ -44,8 +53,12 @@ class Command(BaseCommand):
         services = {}
         for order, (cat_name, items) in enumerate(CATALOG.items(), start=1):
             category, _ = Category.objects.get_or_create(
-                name=cat_name, defaults={"display_order": order}
+                name=cat_name,
+                defaults={"display_order": order, "icon": CATEGORY_ICONS.get(cat_name, "")},
             )
+            if not category.icon and cat_name in CATEGORY_ICONS:   # also fix rows from an earlier run
+                category.icon = CATEGORY_ICONS[cat_name]
+                category.save(update_fields=["icon"])
             for name, pricing, price, minutes in items:
                 service, _ = Service.objects.get_or_create(
                     category=category,
@@ -60,7 +73,8 @@ class Command(BaseCommand):
 
         # An approved provider: visible. Serves Bengaluru, offers everything.
         approved = ProviderProfile.objects.filter(user__phone=APPROVED_PHONE).first() or make_provider(
-            APPROVED_PHONE, business_name="Demo Approved Provider", password="Demo@12345"
+            APPROVED_PHONE, business_name="Demo Approved Provider", password=DEMO_PASSWORD,
+            email="approved.provider@example.com", phone_verified=True,
         )
         for group in services.values():
             for service in group:
@@ -72,13 +86,29 @@ class Command(BaseCommand):
             PENDING_PHONE,
             status=ProviderProfile.ApprovalStatus.PENDING,
             business_name="Demo Pending Provider",
-            password="Demo@12345",
+            password=DEMO_PASSWORD,
+            email="pending.provider@example.com",
+            phone_verified=True,
         )
         offer(pending, services["Cleaning"][0])
         cover(pending, *areas["Chennai"])
 
-        self.stdout.write(self.style.SUCCESS("Demo data ready."))
+        # A customer and an admin, so every role can be tested straight away.
+        if not User.objects.filter(phone=CUSTOMER_PHONE).exists():
+            User.objects.create_user(
+                phone=CUSTOMER_PHONE, password=DEMO_PASSWORD, full_name="Demo Customer",
+                role=User.Role.CUSTOMER, is_phone_verified=True,
+            )
+        if not User.objects.filter(phone=ADMIN_PHONE).exists():
+            User.objects.create_user(
+                phone=ADMIN_PHONE, password=DEMO_PASSWORD, full_name="Demo Admin",
+                role=User.Role.ADMIN, is_staff=True, is_phone_verified=True,
+            )
+
+        self.stdout.write(self.style.SUCCESS("Demo data ready. Logins (password for all: %s):" % DEMO_PASSWORD))
         self.stdout.write(
-            f"  Approved provider {APPROVED_PHONE} (password Demo@12345) serves Bengaluru only.\n"
-            f"  Pending provider  {PENDING_PHONE} serves Chennai but is not approved, so Chennai stays unavailable."
+            f"  admin     {ADMIN_PHONE}  (portal: admin)\n"
+            f"  customer  {CUSTOMER_PHONE}  (portal: customer)\n"
+            f"  provider  {APPROVED_PHONE}  approved, serves Bengaluru (portal: provider)\n"
+            f"  provider  {PENDING_PHONE}  pending, not visible to customers"
         )

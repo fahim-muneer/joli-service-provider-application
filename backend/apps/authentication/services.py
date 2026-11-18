@@ -235,3 +235,26 @@ def change_password(*, user, old_password: str, new_password: str) -> None:
     user.set_password(new_password)
     user.save(update_fields=["password"])
     revoke_all_sessions(user)
+
+
+# ---------------------------------------------------------------------------
+# Profile
+# ---------------------------------------------------------------------------
+
+@transaction.atomic
+def update_profile(*, user, **fields):
+    """Change full_name and/or email. Only the keys that are passed are touched.
+    The phone number is NOT editable here: changing it needs its own verification flow."""
+    changed = []
+    if "full_name" in fields:
+        user.full_name = fields["full_name"].strip()
+        changed.append("full_name")
+    if "email" in fields and fields["email"] != user.email:
+        user.email = fields["email"]
+        changed.append("email")
+        if hasattr(user, "is_email_verified"):   # a new address is unverified again
+            user.is_email_verified = False
+            changed.append("is_email_verified")
+    if changed:
+        user.save(update_fields=changed)
+    return user

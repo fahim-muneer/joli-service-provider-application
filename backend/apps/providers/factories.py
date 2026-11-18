@@ -12,9 +12,13 @@ def make_provider(
     status=ProviderProfile.ApprovalStatus.APPROVED,
     business_name="Demo Provider",
     password="Str0ng-Passw0rd!",
+    email=None,
+    phone_verified=False,
 ):
+    extra = {"email": email} if email else {}
     user = User.objects.create_user(
-        phone=phone, password=password, full_name=business_name, role=User.Role.PROVIDER
+        phone=phone, password=password, full_name=business_name, role=User.Role.PROVIDER,
+        is_phone_verified=phone_verified, **extra,
     )
     return ProviderProfile.objects.create(
         user=user, approval_status=status, business_name=business_name

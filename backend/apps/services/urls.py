@@ -6,6 +6,7 @@ from .views import (
     AdminServiceViewSet,
     CategoryListView,
     ServiceDetailView,
+    ServiceProviderListView,
     ServiceListView,
 )
 
@@ -16,5 +17,6 @@ router.register("admin/services", AdminServiceViewSet, basename="admin-service")
 urlpatterns = [
     path("categories/", CategoryListView.as_view(), name="category-list"),
     path("<int:pk>/", ServiceDetailView.as_view(), name="service-detail"),
+    path("<int:pk>/providers/", ServiceProviderListView.as_view(), name="service-provider-list"),
     path("", ServiceListView.as_view(), name="service-list"),
 ] + router.urls
