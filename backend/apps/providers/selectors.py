@@ -212,8 +212,8 @@ def _to_local(dt):
 
 
 def is_within_availability(profile, start_dt, minutes) -> bool:
-    """Can this provider take a job starting at `start_dt` and lasting `minutes`?
-    (Booking uses this later; it does not look at existing bookings yet.)"""
+    """Does this provider's SCHEDULE allow a job starting at `start_dt` and lasting `minutes`?
+    Existing bookings are checked separately (bookings.selectors.provider_conflicts)."""
     start = _to_local(start_dt)
     windows = list(
         ProviderAvailability.objects.filter(provider=profile, available_date=start.date())
@@ -222,9 +222,9 @@ def is_within_availability(profile, start_dt, minutes) -> bool:
 
 
 def filter_offers_available_at(offers, start_dt):
-    """Keep only the offers whose provider can do the job at `start_dt`, using each
-    offer's own duration. Two queries, however many providers there are; the
-    queryset's ordering is preserved."""
+    """Keep only the offers whose provider can do the job at `start_dt`: inside a working
+    window (using each offer's own duration), clear of blocked time, and not already booked.
+    Three queries however many providers there are; the queryset's ordering is preserved."""
     start = _to_local(start_dt)
     rows = list(offers.values_list("pk", "provider_id", "estimated_duration_minutes"))
     windows = defaultdict(list)
@@ -232,8 +232,28 @@ def filter_offers_available_at(offers, start_dt):
         provider_id__in={provider_id for _, provider_id, _ in rows}, available_date=start.date()
     ):
         windows[w.provider_id].append(w)
-    keep = [pk for pk, provider_id, minutes in rows if _window_fits(windows[provider_id], start, minutes)]
-    return offers.filter(pk__in=keep)
+    free = [(pk, provider_id, minutes) for pk, provider_id, minutes in rows if _window_fits(windows[provider_id], start, minutes)]
+
+    if free:
+        # Imported here: bookings depends on providers, so providers must not import bookings at load time.
+        from apps.bookings.models import Booking
+
+        start_aware = start if timezone.is_aware(start) else timezone.make_aware(start)
+        longest = max(minutes for _, _, minutes in free)
+        busy = defaultdict(list)
+        for provider_id, b_start, b_end in Booking.objects.filter(
+            assigned_provider_id__in={provider_id for _, provider_id, _ in free},
+            status__in=Booking.ACTIVE_STATUSES,
+            scheduled_at__lt=start_aware + timedelta(minutes=longest),
+            ends_at__gt=start_aware,
+        ).values_list("assigned_provider_id", "scheduled_at", "ends_at"):
+            busy[provider_id].append((b_start, b_end))
+        free = [
+            (pk, provider_id, minutes)
+            for pk, provider_id, minutes in free
+            if not any(b_start < start_aware + timedelta(minutes=minutes) and b_end > start_aware for b_start, b_end in busy[provider_id])
+        ]
+    return offers.filter(pk__in=[pk for pk, _, _ in free])
 
 
 # ------------------------- customer-facing provider listing -------------------------

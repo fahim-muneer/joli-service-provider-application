@@ -125,6 +125,6 @@ class MatchingTests(APITestCase):
         for i in range(6):
             extra = self.provider(f"+91980000010{i}", f"Extra {i}", "260")
             self.window(extra, 2, "09:00", "17:00")
-        with self.assertNumQueries(5):          # service check + count + offers + windows + page of rows
+        with self.assertNumQueries(6):          # service check + offers + windows + bookings + count + page of rows
             res = self.client.get(self.url, {"scheduled_at": at(2, 10).isoformat()})
         self.assertEqual(res.data["count"], 7)
