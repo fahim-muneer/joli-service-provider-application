@@ -12,11 +12,6 @@ urlpatterns = [
     path("me/services/", views.ProviderServiceListCreateView.as_view(), name="provider-service-list"),
     path("me/services/<int:pk>/", views.ProviderServiceDetailView.as_view(), name="provider-service-detail"),
     path("me/areas/", views.ProviderAreasView.as_view(), name="provider-areas"),
-    path("me/availability/", views.ProviderOnlineView.as_view(), name="provider-online"),
-    path("me/schedule/", views.ProviderScheduleListCreateView.as_view(), name="provider-schedule-list"),
-    path("me/schedule/<int:pk>/", views.ProviderScheduleDetailView.as_view(), name="provider-schedule-detail"),
-    # ---- public ----
-    path("public/<int:pk>/", views.PublicProviderDetailView.as_view(), name="public-provider-detail"),
     # ---- admin portal ----
     path("admin/providers/", views.AdminProviderListView.as_view(), name="admin-provider-list"),
     path("admin/providers/<int:pk>/", views.AdminProviderDetailView.as_view(), name="admin-provider-detail"),

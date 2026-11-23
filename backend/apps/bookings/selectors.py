@@ -26,9 +26,26 @@ def _detail(qs):
 
 # ---- customer ----
 
-def list_customer_bookings(user, *, status=None):
-    qs = Booking.objects.filter(customer=user).select_related("service", "assigned_provider", "assigned_provider__user")
-    return qs.filter(status=status) if status else qs
+SCOPES = ("upcoming", "history")
+_UPCOMING = [Booking.Status.REQUESTED, Booking.Status.ACCEPTED, Booking.Status.IN_PROGRESS]
+_HISTORY = [Booking.Status.COMPLETED, Booking.Status.CANCELLED, Booking.Status.EXPIRED]
+
+
+def apply_scope(qs, scope):
+    """upcoming = still going to happen (soonest first); history = finished (latest first)."""
+    if scope == "upcoming":
+        return qs.filter(status__in=_UPCOMING).order_by("scheduled_at", "id")
+    if scope == "history":
+        return qs.filter(status__in=_HISTORY).order_by("-scheduled_at", "-id")
+    return qs
+
+
+def list_customer_bookings(user, *, status=None, scope=None):
+    qs = Booking.objects.filter(customer=user).select_related(
+        "service", "assigned_provider", "assigned_provider__user"
+    ).prefetch_related("requests")
+    qs = qs.filter(status=status) if status else qs
+    return apply_scope(qs, scope)
 
 
 def get_customer_booking(user, pk) -> Booking | None:
@@ -50,13 +67,17 @@ def get_provider_request(provider, pk) -> BookingRequest | None:
     return BookingRequest.objects.select_related("booking", "booking__service").filter(provider=provider, pk=pk).first()
 
 
-def list_provider_bookings(provider, *, status=None):
+def list_provider_bookings(provider, *, status=None, scope=None):
     qs = Booking.objects.filter(assigned_provider=provider).select_related("service", "customer")
-    return qs.filter(status=status) if status else qs
+    qs = qs.filter(status=status) if status else qs
+    return apply_scope(qs, scope)
 
 
 def get_provider_booking(provider, pk) -> Booking | None:
-    return Booking.objects.select_related("service", "customer").filter(assigned_provider=provider, pk=pk).first()
+    return (
+        Booking.objects.select_related("service", "customer").prefetch_related("status_logs")
+        .filter(assigned_provider=provider, pk=pk).first()
+    )
 
 
 # ---- admin ----

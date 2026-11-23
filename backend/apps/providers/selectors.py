@@ -195,7 +195,7 @@ def overlapping_windows(profile, date, start, end, *, is_available, exclude_pk=N
     return qs.exclude(pk=exclude_pk) if exclude_pk else qs
 
 
-def _window_fits(windows, start, minutes) -> bool:
+def window_fits(windows, start, minutes) -> bool:
     """`windows`: one provider's windows for the day of `start` (a naive local datetime).
     True if a working window fully contains the job and no blocked window touches it."""
     end = start + timedelta(minutes=minutes)
@@ -207,32 +207,32 @@ def _window_fits(windows, start, minutes) -> bool:
     return any(w.is_available and w.start_time <= s and e <= w.end_time for w in windows)
 
 
-def _to_local(dt):
+def to_local(dt):
     return timezone.localtime(dt) if timezone.is_aware(dt) else dt
 
 
 def is_within_availability(profile, start_dt, minutes) -> bool:
     """Does this provider's SCHEDULE allow a job starting at `start_dt` and lasting `minutes`?
     Existing bookings are checked separately (bookings.selectors.provider_conflicts)."""
-    start = _to_local(start_dt)
+    start = to_local(start_dt)
     windows = list(
         ProviderAvailability.objects.filter(provider=profile, available_date=start.date())
     )
-    return _window_fits(windows, start, minutes)
+    return window_fits(windows, start, minutes)
 
 
 def filter_offers_available_at(offers, start_dt):
     """Keep only the offers whose provider can do the job at `start_dt`: inside a working
     window (using each offer's own duration), clear of blocked time, and not already booked.
     Three queries however many providers there are; the queryset's ordering is preserved."""
-    start = _to_local(start_dt)
+    start = to_local(start_dt)
     rows = list(offers.values_list("pk", "provider_id", "estimated_duration_minutes"))
     windows = defaultdict(list)
     for w in ProviderAvailability.objects.filter(
         provider_id__in={provider_id for _, provider_id, _ in rows}, available_date=start.date()
     ):
         windows[w.provider_id].append(w)
-    free = [(pk, provider_id, minutes) for pk, provider_id, minutes in rows if _window_fits(windows[provider_id], start, minutes)]
+    free = [(pk, provider_id, minutes) for pk, provider_id, minutes in rows if window_fits(windows[provider_id], start, minutes)]
 
     if free:
         # Imported here: bookings depends on providers, so providers must not import bookings at load time.

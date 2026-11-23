@@ -1,10 +1,32 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.locations.models import CustomerAddress
 from apps.providers.models import ProviderProfile
 from apps.services.models import Service
 
-from .models import Booking, BookingRequest, BookingStatusLog
+from . import services as booking_services
+from .models import (
+    ADMIN_REASONS,
+    CUSTOMER_REASONS,
+    PROVIDER_REASONS,
+    Booking,
+    BookingRequest,
+    BookingStatusLog,
+    CancelReason,
+)
+
+
+def _cancellation(obj):
+    """The cancellation details, or None when the booking was not cancelled."""
+    if obj.status != Booking.Status.CANCELLED:
+        return None
+    return {
+        "cancelled_at": obj.cancelled_at, "by": obj.cancelled_by_role,
+        "reason_code": obj.cancellation_reason_code,
+        "reason": CancelReason(obj.cancellation_reason_code).label if obj.cancellation_reason_code else "",
+        "note": obj.cancellation_note, "late": obj.cancelled_late,
+    }
 
 
 def _display_name(provider):
@@ -47,6 +69,10 @@ class BookingSerializer(serializers.ModelSerializer):
     provider = serializers.SerializerMethodField()
     pending_offers = serializers.SerializerMethodField()
     status_history = StatusLogSerializer(source="status_logs", many=True, read_only=True)
+    start_code = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+    free_cancellation_until = serializers.SerializerMethodField()
+    cancellation = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -54,9 +80,25 @@ class BookingSerializer(serializers.ModelSerializer):
             "id", "reference", "status", "service", "scheduled_at", "ends_at", "duration_minutes",
             "item_count", "customer_notes", "payment_mode", "unit_price", "discount_amount",
             "estimated_total", "currency", "address", "provider", "pending_offers",
-            "accepted_at", "created_at", "status_history",
+            "start_code", "can_cancel", "free_cancellation_until", "cancellation",
+            "accepted_at", "started_at", "completed_at", "created_at", "status_history",
         ]
         read_only_fields = fields
+
+    def get_start_code(self, obj):
+        """The customer shows this to the provider on arrival; it is only relevant until the job starts."""
+        return obj.start_code if obj.status == Booking.Status.ACCEPTED else None
+
+    def get_can_cancel(self, obj):
+        return obj.status in (Booking.Status.REQUESTED, Booking.Status.ACCEPTED)
+
+    def get_free_cancellation_until(self, obj):
+        if obj.status != Booking.Status.ACCEPTED:
+            return None
+        return obj.scheduled_at - booking_services.FREE_CANCEL_WINDOW
+
+    def get_cancellation(self, obj):
+        return _cancellation(obj)
 
     def get_service(self, obj):
         return {"id": obj.service_id, "name": obj.service_name}
@@ -112,15 +154,36 @@ class ProviderBookingSerializer(serializers.ModelSerializer):
     service = serializers.SerializerMethodField()
     address = serializers.JSONField(source="address_snapshot", read_only=True)
     customer = serializers.SerializerMethodField()
+    status_history = StatusLogSerializer(source="status_logs", many=True, read_only=True)
+    can_start = serializers.SerializerMethodField()
+    start_opens_at = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+    cancellation = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = [
             "id", "reference", "status", "service", "scheduled_at", "ends_at", "duration_minutes",
             "item_count", "customer_notes", "payment_mode", "unit_price", "estimated_total", "currency",
-            "address", "customer", "accepted_at",
+            "address", "customer", "accepted_at", "started_at", "completed_at",
+            "can_start", "start_opens_at", "can_cancel", "cancellation", "status_history",
         ]
-        read_only_fields = fields
+        read_only_fields = fields   # note: the start code is never part of the provider's view
+
+    def get_can_start(self, obj):
+        if obj.status != Booking.Status.ACCEPTED:
+            return False
+        opens, closes = booking_services.start_window(obj)
+        return opens <= timezone.now() <= closes
+
+    def get_start_opens_at(self, obj):
+        return booking_services.start_window(obj)[0] if obj.status == Booking.Status.ACCEPTED else None
+
+    def get_can_cancel(self, obj):
+        return obj.status == Booking.Status.ACCEPTED
+
+    def get_cancellation(self, obj):
+        return _cancellation(obj)
 
     def get_service(self, obj):
         return {"id": obj.service_id, "name": obj.service_name}
@@ -136,8 +199,12 @@ class AdminBookingSerializer(BookingSerializer):
     offers = serializers.SerializerMethodField()
 
     class Meta(BookingSerializer.Meta):
-        fields = BookingSerializer.Meta.fields + ["customer", "offers"]
+        # admins (support) see the start code even after the job has started
+        fields = BookingSerializer.Meta.fields + ["customer", "offers", "start_attempts"]
         read_only_fields = fields
+
+    def get_start_code(self, obj):
+        return obj.start_code or None
 
     def get_customer(self, obj):
         return {"id": obj.customer_id, "name": obj.customer.full_name, "phone": obj.customer.phone}
@@ -152,3 +219,28 @@ class AdminBookingSerializer(BookingSerializer):
 
 class DeclineSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+
+
+class CancelSerializer(serializers.Serializer):
+    reason_code = serializers.ChoiceField(choices=CancelReason.choices)
+    note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+
+
+class StartSerializer(serializers.Serializer):
+    code = serializers.RegexField(r"^\d{6}$", error_messages={"invalid": "Enter the 6-digit code from the customer."})
+
+
+class CompleteSerializer(serializers.Serializer):
+    note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+
+
+def reasons_payload():
+    """For the cancel popups: the allowed reasons per role."""
+    def as_list(codes):
+        return [{"code": c.value, "label": c.label} for c in codes]
+
+    return {
+        "customer": as_list(CUSTOMER_REASONS),
+        "provider": as_list(PROVIDER_REASONS),
+        "admin": as_list(ADMIN_REASONS),
+    }

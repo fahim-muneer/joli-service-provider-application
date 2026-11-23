@@ -4,6 +4,34 @@ from django.db import models
 from django.db.models import F, Q
 
 
+class CancelReason(models.TextChoices):
+    # customer
+    CHANGED_MIND = "changed_mind", "I changed my mind"
+    BOOKED_BY_MISTAKE = "booked_by_mistake", "I booked by mistake"
+    FOUND_ANOTHER_PROVIDER = "found_another_provider", "I found another provider"
+    SCHEDULE_CONFLICT = "schedule_conflict", "The time no longer works for me"
+    PRICE_TOO_HIGH = "price_too_high", "The price is too high"
+    # provider
+    PROVIDER_UNAVAILABLE = "provider_unavailable", "I am no longer available"
+    EMERGENCY = "emergency", "An emergency came up"
+    CUSTOMER_UNREACHABLE = "customer_unreachable", "I cannot reach the customer"
+    WRONG_ADDRESS = "wrong_address", "The address is wrong or unsafe"
+    # admin
+    POLICY_VIOLATION = "policy_violation", "Policy violation"
+    OTHER = "other", "Other"
+
+
+CUSTOMER_REASONS = [
+    CancelReason.CHANGED_MIND, CancelReason.BOOKED_BY_MISTAKE, CancelReason.FOUND_ANOTHER_PROVIDER,
+    CancelReason.SCHEDULE_CONFLICT, CancelReason.PRICE_TOO_HIGH, CancelReason.OTHER,
+]
+PROVIDER_REASONS = [
+    CancelReason.PROVIDER_UNAVAILABLE, CancelReason.EMERGENCY, CancelReason.CUSTOMER_UNREACHABLE,
+    CancelReason.WRONG_ADDRESS, CancelReason.OTHER,
+]
+ADMIN_REASONS = list(CancelReason)
+
+
 class Booking(models.Model):
     class Status(models.TextChoices):
         REQUESTED = "requested", "Requested"        # offered to providers, waiting for one to accept
@@ -50,6 +78,23 @@ class Booking(models.Model):
     address_snapshot = models.JSONField(default=dict)
 
     accepted_at = models.DateTimeField(null=True, blank=True)
+
+    # Starting the job: the customer sees `start_code`; the provider must enter it, which proves they are on site.
+    start_code = models.CharField(max_length=6, blank=True)
+    start_attempts = models.PositiveSmallIntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Cancellation
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    cancelled_by_role = models.CharField(max_length=10, blank=True)
+    cancellation_reason_code = models.CharField(max_length=30, blank=True, choices=CancelReason.choices)
+    cancellation_note = models.TextField(blank=True)
+    cancelled_late = models.BooleanField(default=False)  # cancelled inside the free-cancellation window
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -67,6 +112,18 @@ class Booking(models.Model):
             models.CheckConstraint(
                 condition=~Q(status__in=["accepted", "in_progress", "completed"]) | Q(assigned_provider__isnull=False),
                 name="booking_active_needs_provider",
+            ),
+            models.CheckConstraint(
+                condition=~Q(status__in=["in_progress", "completed"]) | Q(started_at__isnull=False),
+                name="booking_started_has_timestamp",
+            ),
+            models.CheckConstraint(
+                condition=~Q(status="completed") | Q(completed_at__isnull=False),
+                name="booking_completed_has_timestamp",
+            ),
+            models.CheckConstraint(
+                condition=~Q(status="cancelled") | (Q(cancelled_at__isnull=False) & ~Q(cancellation_reason_code="")),
+                name="booking_cancelled_has_reason",
             ),
         ]
 
