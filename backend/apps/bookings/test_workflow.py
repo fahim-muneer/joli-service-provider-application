@@ -93,7 +93,7 @@ class CustomerCancellationTests(WorkflowTestCase):
         self.as_user(self.customer)
         data = self.client.get(reverse("booking-detail", args=[booking.pk])).data
         self.assertTrue(data["can_cancel"])
-        self.assertEqual(data["free_cancellation_until"], (booking.scheduled_at - FREE_CANCEL_WINDOW).astimezone(timezone.get_current_timezone()).isoformat())
+        self.assertEqual(data["free_cancellation_until"], booking.scheduled_at - FREE_CANCEL_WINDOW)   # the same instant
         requested = self.direct(status="requested", provider=None)
         self.assertIsNone(self.client.get(reverse("booking-detail", args=[requested.pk])).data["free_cancellation_until"])
 
