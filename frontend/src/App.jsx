@@ -1,122 +1,99 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { Navigate, Route, Routes } from "react-router-dom";
+import Layout from "./components/Layout";
+import AdminShell from "./components/portal/AdminShell";
+import AuthFrame from "./components/portal/AuthFrame";
+import ProviderShell from "./components/portal/ProviderShell";
+import ProtectedRoute from "./components/ProtectedRoute";
+import ComingSoon from "./pages/ComingSoon";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import NotFound from "./pages/NotFound";
+import PortalSoon from "./pages/PortalSoon";
+import Register from "./pages/Register";
+import ServiceDetails from "./pages/ServiceDetails";
+import Services from "./pages/Services";
+import VerifyPhone from "./pages/VerifyPhone";
+import AdminDashboard from "./pages/admin/Dashboard";
+import AdminProviderDetail from "./pages/admin/ProviderDetail";
+import AdminProviders from "./pages/admin/Providers";
+import ProviderAreas from "./pages/provider/Areas";
+import ProviderDocuments from "./pages/provider/Documents";
+import ProviderOverview from "./pages/provider/Overview";
+import ProviderProfile from "./pages/provider/Profile";
+import ProviderSchedule from "./pages/provider/Schedule";
+import ProviderServices from "./pages/provider/Services";
 
-function App() {
-  const [count, setCount] = useState(0)
-
+// Three areas, one per kind of user, each with its own look (the three pages of the Figma file):
+//   1. Customer site   /...            frame: <Layout />                          login: /login
+//   2. Provider area   /provider/...   frames: <AuthFrame> (login) / <ProviderShell> (sidebar)   login: /provider/login
+//   3. Admin area      /admin/...      frames: <AuthFrame> (login) / <AdminShell> (sidebar)      login: /admin/login
+// <ProtectedRoute role="..."> is the lock: it lets only that role through.
+export default function App() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <Routes>
+      {/* 1. Customer site */}
+      <Route element={<Layout />}>
+        <Route index element={<Home />} />
+        <Route path="services" element={<Services />} />
+        <Route path="services/:id" element={<ServiceDetails />} />
+        <Route path="login" element={<Login portal="customer" />} />
+        <Route path="register" element={<Register role="customer" />} />
+        <Route path="become-a-provider" element={<Navigate to="/provider/register" replace />} />
+        <Route element={<ProtectedRoute role="customer" />}>
+          <Route path="verify-phone" element={<VerifyPhone role="customer" />} />
+          <Route path="bookings" element={<ComingSoon title="My Bookings" note="Your bookings will appear here." />} />
+          <Route path="account" element={<ComingSoon title="My Account" note="Profile and addresses arrive in Week 3." />} />
+        </Route>
+        <Route path="*" element={<NotFound />} />
+      </Route>
 
-      <div className="ticks"></div>
+      {/* 2. Provider area */}
+      <Route path="provider">
+        <Route element={<AuthFrame portal="provider" />}>
+          <Route path="login" element={<Login portal="provider" />} />
+          <Route path="register" element={<Register role="provider" />} />
+          <Route element={<ProtectedRoute role="provider" />}>
+            <Route path="verify-phone" element={<VerifyPhone role="provider" />} />
+          </Route>
+        </Route>
+        <Route element={<ProtectedRoute role="provider" />}>
+          <Route element={<ProviderShell />}>
+            <Route index element={<ProviderOverview />} />
+            <Route path="profile" element={<ProviderProfile />} />
+            <Route path="services" element={<ProviderServices />} />
+            <Route path="areas" element={<ProviderAreas />} />
+            <Route path="documents" element={<ProviderDocuments />} />
+            <Route path="schedule" element={<ProviderSchedule />} />
+            <Route path="requests" element={<PortalSoon note="Booking requests will appear here once bookings are added." />} />
+            <Route path="earnings" element={<PortalSoon note="Your earnings will appear here once bookings are added." />} />
+            <Route path="notifications" element={<PortalSoon note="Notifications are coming soon." />} />
+            <Route path="payment" element={<PortalSoon note="Payment details are coming soon." />} />
+          </Route>
+        </Route>
+      </Route>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {/* 3. Admin area (no registration: admins are created by staff) */}
+      <Route path="admin">
+        <Route element={<AuthFrame portal="admin" />}>
+          <Route path="login" element={<Login portal="admin" />} />
+        </Route>
+        <Route element={<ProtectedRoute role="admin" />}>
+          <Route element={<AdminShell />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="providers" element={<AdminProviders />} />
+            <Route path="providers/:id" element={<AdminProviderDetail />} />
+            <Route path="customers" element={<PortalSoon heading="Customers" note="Customer management is coming soon." />} />
+            <Route path="categories" element={<PortalSoon heading="Categories" note="Category management is coming soon." />} />
+            <Route path="services" element={<PortalSoon heading="Services" note="Service management is coming soon." />} />
+            <Route path="areas" element={<PortalSoon heading="Areas" note="Area management is coming soon." />} />
+            <Route path="bookings" element={<PortalSoon heading="Bookings" note="Bookings are coming soon." />} />
+            <Route path="reviews" element={<PortalSoon heading="Reviews & Ratings" note="Reviews are coming soon." />} />
+            <Route path="payments" element={<PortalSoon heading="Collections & Payouts" note="Payouts are coming soon." />} />
+            <Route path="notifications" element={<PortalSoon heading="Notifications" note="Notifications are coming soon." />} />
+            <Route path="settings" element={<PortalSoon heading="Settings" note="Settings are coming soon." />} />
+          </Route>
+        </Route>
+      </Route>
+    </Routes>
+  );
 }
-
-export default App
