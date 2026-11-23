@@ -17,6 +17,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PhoneVerificationConfirmSerializer,
+    ProfileUpdateSerializer,
     ProfileSerializer,
     ProviderRegistrationSerializer,
     RegistrationSerializer,
@@ -189,10 +190,16 @@ class ChangePasswordView(APIView):
 
 
 class ProfileView(generics.RetrieveAPIView):
-    """Current user's profile, for any role."""
+    """GET: the current user's profile (any role). PATCH: change full_name / email."""
 
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
         return self.request.user
+
+    def patch(self, request):
+        serializer = ProfileUpdateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        user = services.update_profile(user=request.user, **serializer.validated_data)
+        return Response(ProfileSerializer(user).data)

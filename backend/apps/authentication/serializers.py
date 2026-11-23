@@ -194,3 +194,24 @@ class ChangePasswordSerializer(serializers.Serializer):
                 {"new_password_confirm": "Passwords do not match."}
             )
         return attrs
+
+
+class ProfileUpdateSerializer(serializers.Serializer):
+    """PATCH /auth/profile/. Anything else in the body (role, phone, ...) is ignored."""
+
+    full_name = serializers.CharField(max_length=150, required=False)
+    email = EmailAddressField(required=False, allow_null=True, allow_blank=True, max_length=254)
+
+    def validate_email(self, value):
+        user = self.context["request"].user
+        value = value or None
+        if value is None and user.role == User.Role.PROVIDER:
+            raise serializers.ValidationError("A provider must keep an email address.")
+        if value and User.objects.filter(email__iexact=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Send at least one of: full_name, email.")
+        return attrs

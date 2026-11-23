@@ -11,73 +11,32 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
-import jwt
-
 from dotenv import load_dotenv
-from datetime import timedelta
-
-# Database
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "5432"),
-    }
-}
-
-# jwt
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "AUTH_HEADER_TYPES": ("Bearer",),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": True,
-}
-
-
-# restframework
-REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
-    ],
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ],
-}
-
-#cors
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
-
-
-
-
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Load environment variables from backend/.env
+# Load backend/.env FIRST: everything below that calls os.getenv() depends on it.
 load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-4p*#%-74&@cupcl&2*#=^uyj*j3sxo5+(&301@=exm6y(1s!hx'
+# Set SECRET_KEY in backend/.env for any real deployment; the fallback is for local development only.
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    "django-insecure-4p*#%-74&@cupcl&2*#=^uyj*j3sxo5+(&301@=exm6y(1s!hx",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "True").lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = []
+# Comma-separated in .env, e.g. ALLOWED_HOSTS=api.example.com,localhost
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "").split(",") if h.strip()]
 
 AUTH_USER_MODEL = "users.User"
 
@@ -143,7 +102,18 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
+# Values come from backend/.env (loaded above).
 
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("DB_NAME"),
+        "USER": os.getenv("DB_USER"),
+        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5432"),
+    }
+}
 
 
 # Password validation
@@ -170,7 +140,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Provider schedules and "today" are calendar dates in the customer's local time,
+# so this must be the service area's time zone (India), not UTC.
+TIME_ZONE = 'Asia/Kolkata'
 
 USE_I18N = True
 
@@ -182,12 +154,45 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Public uploads (service images). Served by Django in development only.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# PRIVATE uploads (provider ID documents). Never served directly: only through
+# permission-checked API endpoints. Keep this folder out of git.
+PRIVATE_MEDIA_ROOT = BASE_DIR / "private_media"
+
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+
+# REST framework and JWT
+
+REST_FRAMEWORK = {
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
 }
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+}
+
+# CORS: the React app's address (Vite uses 5173 by default; this project's frontend runs on 5174).
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+]
