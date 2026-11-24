@@ -60,7 +60,7 @@ describe("routes", () => {
     expect(render("/provider/login")).toContain("Service provider log in");
     expect(render("/provider/login")).toContain("Join Largest Service Network"); // Figma login card
     expect(render("/admin/login")).toContain("Welcome back admin"); // Figma admin login
-    expect(render("/admin/login")).toContain("Email");
+    expect(render("/admin/login")).toContain("Phone number");
     expect(render("/admin/login")).not.toContain("Create an account"); // admins do not self-register
   });
 

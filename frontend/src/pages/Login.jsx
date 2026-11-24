@@ -16,8 +16,7 @@ export default function Login({ portal = "customer" }) {
   const { user, login } = useAuth();
   const here = useRouterLocation();
   const role = ROLES[portal];
-  const byEmail = portal === "admin"; // the admin login asks for an email, the others for a phone number
-  const [form, setForm] = useState({ phone: "", email: "", password: "" });
+  const [form, setForm] = useState({ phone: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -35,7 +34,7 @@ export default function Login({ portal = "customer" }) {
     setError("");
     setSubmitting(true);
     try {
-      await login({ ...(byEmail ? { email: form.email.trim() } : { phone: form.phone }), password: form.password, portal });
+      await login({ ...form, portal });
     } catch (err) {
       setError(getErrorMessage(err));
       setSubmitting(false);
@@ -48,23 +47,16 @@ export default function Login({ portal = "customer" }) {
       <h1>{portal === "customer" ? "Log in" : portal === "admin" ? "Login" : `${role.label} log in`}</h1>
       {here.state?.notice && <p className="notice" role="status">{here.state.notice}</p>}
       <form className="form" onSubmit={handleSubmit}>
-        {byEmail ? (
-          <label>
-            Email
-            <input type="email" value={form.email} onChange={update("email")} placeholder="username@gmail.com" autoComplete="username" required />
-          </label>
-        ) : (
-          <label>
-            Phone number
-            <input type="tel" value={form.phone} onChange={update("phone")} autoComplete="tel" required />
-          </label>
-        )}
+        <label>
+          Phone number
+          <input type="tel" value={form.phone} onChange={update("phone")} autoComplete="tel" required />
+        </label>
         <label>
           Password
           <input type="password" value={form.password} onChange={update("password")} autoComplete="current-password" required />
         </label>
         <ErrorMessage message={error} />
-        <Button type="submit" disabled={submitting}>{submitting ? "Signing in…" : byEmail ? "Sign in" : "Log in"}</Button>
+        <Button type="submit" disabled={submitting}>{submitting ? "Signing in…" : portal === "admin" ? "Sign in" : "Log in"}</Button>
       </form>
 
       <p className="form-links">

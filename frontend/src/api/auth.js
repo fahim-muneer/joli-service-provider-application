@@ -2,13 +2,10 @@ import { api } from "./client";
 import { tokenStore } from "./tokenStore";
 
 /** portal: "customer" | "provider" | "admin". Each login page sends its own, so an account
- *  can only sign in through the door it belongs to. Customers and providers sign in with `phone`;
- *  the admin portal (Figma "Admin Login") uses `email`. Returns the user. */
-export async function login({ phone, email, password, portal }) {
-  const body = { password, portal };
-  if (email) body.email = email;
-  else body.phone = phone;
-  const { data } = await api.post("/auth/login/", body, { skipAuth: true });
+ *  can only sign in through the door it belongs to. Everyone signs in with phone + password.
+ *  Returns the user. */
+export async function login({ phone, password, portal }) {
+  const { data } = await api.post("/auth/login/", { phone, password, portal }, { skipAuth: true });
   tokenStore.set({ access: data.access, refresh: data.refresh });
   return data.user;
 }
