@@ -5,12 +5,12 @@ import Img from "../components/Img";
 import { CategoryTile } from "../components/IconTile";
 import PartnerLink from "../components/PartnerLink";
 import Spinner from "../components/Spinner";
-import { useLocation } from "../context/LocationContext";
+import { useLocation } from "../context/useLocation";
 import { useCategories } from "../hooks";
 import { categoryBannerUrl } from "../utils/categories";
 
 const PARTNER_POINTS = [
-  { icon: "partner-productivity", title: "Increase Your Earnings", text: "With Joli, you do more than your usual jobs, and earn more. No more bargaining with your customers!" },
+  { icon: "partner-productivity", title: "Increase Your Productivity", text: "With Joli, you do more than your usual jobs, and earn more. No more bargaining with your customers!" },
   { icon: "partner-earnings", title: "Increase Your Earnings", text: "With Joli, you do more than your usual jobs, and earn more. No more bargaining with your customers!" },
   { icon: "partner-customers", title: "Large Customer Base", text: "With us, you are visible to a much larger customer base, without any marketing costs. We do your marketing for you!" },
 ];

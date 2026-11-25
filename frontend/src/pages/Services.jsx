@@ -5,7 +5,7 @@ import Button from "../components/Button";
 import ErrorMessage from "../components/ErrorMessage";
 import { CategoryTile, ServiceTile } from "../components/IconTile";
 import Spinner from "../components/Spinner";
-import { useLocation } from "../context/LocationContext";
+import { useLocation } from "../context/useLocation";
 import { useCategories } from "../hooks";
 import { getErrorMessage } from "../utils/errors";
 
@@ -20,6 +20,7 @@ export default function Services() {
   const { selectedCity, selectedCityId } = useLocation();
   const categories = useCategories(selectedCityId);
 
+  const [attempt, setAttempt] = useState(0); // bump to re-run the load ("Try again")
   const [state, setState] = useState({ status: "loading", items: [], next: false, page: 1, error: "", more: false });
 
   const fetchPage = useCallback(
@@ -37,7 +38,7 @@ export default function Services() {
     return () => {
       cancelled = true;
     };
-  }, [fetchPage]);
+  }, [fetchPage, attempt]);
 
   async function loadMore() {
     setState((s) => ({ ...s, more: true }));
@@ -68,7 +69,8 @@ export default function Services() {
       {search && <p className="empty">Results for “{search}”{selectedCity ? ` in ${selectedCity.name}` : ""}</p>}
 
       {state.status === "loading" && <Spinner label="Loading services…" />}
-      {state.status === "error" && <ErrorMessage message={state.error} onRetry={() => setState((s) => ({ ...s }))} />}
+      {state.status === "error" && <ErrorMessage message={state.error} onRetry={() => setAttempt((n) => n + 1)} />}
+      {state.status === "ready" && state.error && <ErrorMessage message={state.error} />}
       {state.status === "ready" && state.items.length === 0 && (
         <p className="empty">
           {selectedCity ? `No services found in ${selectedCity.name}.` : "No services found."}

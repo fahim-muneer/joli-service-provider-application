@@ -1,21 +1,31 @@
 import { useState } from "react";
-import { Navigate, useLocation as useRouterLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation as useRouterLocation } from "react-router-dom";
 import Button from "../components/Button";
 import ErrorMessage from "../components/ErrorMessage";
-import { useAuth } from "../context/AuthContext";
+import { ROLES, homeFor } from "../auth/roles";
+import { useAuth } from "../context/useAuth";
 import { getErrorMessage } from "../utils/errors";
 
-// A basic sign-in so the API client can be exercised end to end.
-// The finished, styled login and registration pages come in Week 3.
-export default function Login() {
+/** One login page, three doors. The route decides which one:
+ *    /login            -> <Login portal="customer" />
+ *    /provider/login   -> <Login portal="provider" />
+ *    /admin/login      -> <Login portal="admin" />
+ *  The person never picks their role; the page they are on says it, and the backend
+ *  refuses an account that does not belong to this portal. */
+export default function Login({ portal = "customer" }) {
   const { user, login } = useAuth();
-  const navigate = useNavigate();
   const here = useRouterLocation();
-  const [form, setForm] = useState({ phone: "", password: "", portal: "customer" });
+  const role = ROLES[portal];
+  const [form, setForm] = useState({ phone: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  if (user) return <Navigate to="/" replace />;
+  // Already signed in (or just signed in): go back to where they were headed, else to their own home.
+  // Doing the redirect here (not inside handleSubmit) means there is only one place that navigates.
+  if (user) {
+    const mustVerify = user.role !== "admin" && !user.is_phone_verified;
+    return <Navigate to={mustVerify ? ROLES[user.role].verifyPath : (here.state?.from ?? homeFor(user.role))} replace />;
+  }
 
   const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
@@ -24,18 +34,18 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     try {
-      await login(form);
-      navigate(here.state?.from ?? "/", { replace: true });
+      await login({ ...form, portal });
     } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
       setSubmitting(false);
     }
+    // On success `user` is set and the redirect above runs, so nothing else to do.
   }
 
   return (
     <section className="narrow">
-      <h1>Log in</h1>
+      <h1>{portal === "customer" ? "Log in" : portal === "admin" ? "Login" : `${role.label} log in`}</h1>
+      {here.state?.notice && <p className="notice" role="status">{here.state.notice}</p>}
       <form className="form" onSubmit={handleSubmit}>
         <label>
           Phone number
@@ -45,17 +55,17 @@ export default function Login() {
           Password
           <input type="password" value={form.password} onChange={update("password")} autoComplete="current-password" required />
         </label>
-        <label>
-          I am a
-          <select value={form.portal} onChange={update("portal")}>
-            <option value="customer">Customer</option>
-            <option value="provider">Service provider</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
         <ErrorMessage message={error} />
-        <Button type="submit" disabled={submitting}>{submitting ? "Signing in…" : "Log in"}</Button>
+        <Button type="submit" disabled={submitting}>{submitting ? "Signing in…" : portal === "admin" ? "Sign in" : "Log in"}</Button>
       </form>
+
+      <p className="form-links">
+        {role.registerPath && (
+          <>New here? <Link to={role.registerPath}>Create an account</Link></>
+        )}
+        {portal === "customer" && <> · <Link to={ROLES.provider.loginPath}>Provider login</Link></>}
+        {portal === "provider" && <> · <Link to={ROLES.customer.loginPath}>Customer login</Link></>}
+      </p>
     </section>
   );
 }

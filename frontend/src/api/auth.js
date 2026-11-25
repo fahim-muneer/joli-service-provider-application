@@ -25,3 +25,8 @@ export const registerCustomer = (body) =>
   api.post("/auth/register/customer/", body, { skipAuth: true }).then((r) => r.data);
 export const registerProvider = (body) =>
   api.post("/auth/register/provider/", body, { skipAuth: true }).then((r) => r.data);
+export const sendPhoneCode = () =>
+  api.post("/auth/verify-phone/send/").then((r) => r.data);
+
+export const confirmPhoneCode = ({ otp }) =>
+  api.post("/auth/verify-phone/confirm/", { otp }).then((r) => r.data);

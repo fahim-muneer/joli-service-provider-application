@@ -1,5 +1,5 @@
 import { asset } from "../assets";
-import { useLocation } from "../context/LocationContext";
+import { useLocation } from "../context/useLocation";
 import Img from "./Img";
 import { ChevronDown } from "./Icons";
 

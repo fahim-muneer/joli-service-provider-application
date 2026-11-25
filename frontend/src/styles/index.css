@@ -193,3 +193,30 @@ ul { margin: 0; padding: 0; }
 .form { display: grid; gap: 1rem; margin-top: 1rem; }
 .form label { display: grid; gap: 0.35rem; font-weight: 700; color: var(--header-letters); }
 .form input, .form select { font: inherit; padding: 0.65rem 0.8rem; border: 1px solid #000; background: #fff; }
+
+/* ---------- login / register helpers ---------- */
+.form-links { margin-top: 1rem; color: var(--muted); }
+.form-links a { color: var(--logo-color); font-weight: 700; }
+.notice { margin-top: 1rem; padding: 0.65rem 0.8rem; background: var(--highlight); border: 1px solid var(--accent-yellow); }
+
+/* ---------- service details ---------- */
+.service-details { padding-block: 1.5rem 2.5rem; }
+.back-link { color: var(--logo-color); font-weight: 700; text-decoration: none; }
+.service-hero { display: grid; grid-template-columns: minmax(0, 220px) 1fr; gap: 1.5rem; margin: 1rem 0 1.5rem; align-items: start; }
+.service-hero__image { width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--panel-gray); border: 1px solid var(--soft-border); }
+.service-hero__facts { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; color: var(--header-letters); }
+.muted { color: var(--muted); }
+.filters { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-bottom: 1rem; }
+.filters label { display: grid; gap: 0.3rem; font-weight: 700; color: var(--header-letters); }
+.filters select, .filters input { font: inherit; padding: 0.5rem 0.7rem; border: 1px solid #000; background: #fff; }
+.provider-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.provider-card { display: grid; grid-template-columns: auto 1fr auto auto; gap: 1rem; align-items: center; padding: 0.9rem 1rem; background: var(--panel-gray); border: 1px solid var(--soft-border); }
+.provider-card__avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-yellow); display: grid; place-items: center; font-weight: 700; }
+.provider-card__info { display: grid; gap: 0.15rem; }
+.provider-card__info span { color: var(--muted); font-size: 14px; }
+.provider-card__price { font-weight: 700; font-size: 18px; }
+@media (max-width: 640px) {
+  .service-hero { grid-template-columns: 1fr; }
+  .provider-card { grid-template-columns: auto 1fr; }
+  .provider-card__price, .provider-card .btn { grid-column: 2; justify-self: start; }
+}

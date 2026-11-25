@@ -6,6 +6,7 @@ import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { LocationProvider } from "./context/LocationContext";
 import "./styles/index.css";
+import "./styles/portal.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

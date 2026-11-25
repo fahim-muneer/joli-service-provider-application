@@ -9,7 +9,7 @@ import { api } from "./client";
 import { getPublicProvider, listServiceProviders } from "./providers";
 import { tokenStore } from "./tokenStore";
 
-const live = process.env.LIVE_API ? describe : describe.skip;
+const live = globalThis.process?.env?.LIVE_API ? describe : describe.skip;
 
 live("against the real backend", () => {
   it("browses the public catalogue", async () => {

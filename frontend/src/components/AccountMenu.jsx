@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { homeFor } from "../auth/roles";
 
 export default function AccountMenu({ user, onLogout, onNavigate }) {
   const [open, setOpen] = useState(false);
@@ -33,8 +34,14 @@ export default function AccountMenu({ user, onLogout, onNavigate }) {
       {open && (
         <div className="account__menu" role="menu">
           <span className="account__name">{user.full_name}</span>
-          <Link role="menuitem" to="/account" onClick={go}>My Account</Link>
-          <Link role="menuitem" to="/bookings" onClick={go}>My Bookings</Link>
+          {user.role === "customer" ? (
+            <>
+              <Link role="menuitem" to="/account" onClick={go}>My Account</Link>
+              <Link role="menuitem" to="/bookings" onClick={go}>My Bookings</Link>
+            </>
+          ) : (
+            <Link role="menuitem" to={homeFor(user.role)} onClick={go}>Dashboard</Link>
+          )}
           <button type="button" role="menuitem" onClick={() => { go(); onLogout(); }}>Log out</button>
         </div>
       )}
