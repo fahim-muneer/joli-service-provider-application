@@ -3,6 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import models
+from django.db.models import F, Q
 
 from apps.services.models import Service
 
@@ -180,3 +181,35 @@ class ProviderArea(models.Model):
 
     def __str__(self):
         return f"{self.provider_id} covers {self.area_id}"
+
+
+class ProviderAvailability(models.Model):
+    """A time window on one date.
+
+    is_available=True  : "I can take jobs in this window" (working hours).
+    is_available=False : "I'm blocked in this window" (lunch, day off). A blocked
+                         window wins over a working window it overlaps.
+    Working windows may not overlap each other; neither may blocked windows."""
+
+    provider = models.ForeignKey(
+        ProviderProfile, on_delete=models.CASCADE, related_name="availability_windows"
+    )
+    available_date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    is_available = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "provider_availability"
+        ordering = ["available_date", "start_time", "id"]
+        indexes = [models.Index(fields=["provider", "available_date"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(end_time__gt=F("start_time")), name="availability_end_after_start"
+            )
+        ]
+
+    def __str__(self):
+        kind = "available" if self.is_available else "blocked"
+        return f"{self.available_date} {self.start_time}-{self.end_time} ({kind})"

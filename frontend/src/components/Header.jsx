@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import { PROVIDER_APP_URL } from "../config";
 import { useAuth } from "../context/AuthContext";
 import AccountMenu from "./AccountMenu";
 import AnnouncementBar from "./AnnouncementBar";
@@ -23,7 +24,13 @@ export default function Header() {
         <div className="page header__inner">
           <Link to="/" className="logo" onClick={close}>Joli</Link>
 
-          <button type="button" className="header__toggle" aria-expanded={open} aria-controls="header-panel" onClick={() => setOpen((v) => !v)}>
+          <button
+            type="button"
+            className="header__toggle"
+            aria-expanded={open}
+            aria-controls="header-panel"
+            onClick={() => setOpen((v) => !v)}
+          >
             <span className="visually-hidden">Menu</span>
             <span aria-hidden="true">{open ? "✕" : "☰"}</span>
           </button>
@@ -32,15 +39,33 @@ export default function Header() {
             {loading ? null : user ? (
               <AccountMenu user={user} onLogout={handleLogout} onNavigate={close} />
             ) : (
-              <Link to="/login" className="btn btn--yellow" onClick={close}>Login</Link>
+              <Link to="/login" className="btn btn--yellow" onClick={close}>
+                Login
+              </Link>
             )}
+
             <SearchBar onSearch={close} />
+
             <nav className="nav" aria-label="Main">
               <NavLink to="/" end onClick={close}>Home</NavLink>
-              {(!user || user.role === "customer") && <NavLink to="/bookings" onClick={close}>My Bookings</NavLink>}
+
+              {(!user || user.role === "customer") && (
+                <NavLink to="/bookings" onClick={close}>My Bookings</NavLink>
+              )}
+
               <NavLink to="/services" onClick={close}>Services</NavLink>
-              {user?.role !== "provider" && <NavLink to="/provider/register" onClick={close}>Become a Provider</NavLink>}
+
+              {user?.role !== "provider" && (
+                PROVIDER_APP_URL ? (
+                  <a href={PROVIDER_APP_URL}>Become a Provider</a>
+                ) : (
+                  <NavLink to="/provider/register" onClick={close}>
+                    Become a Provider
+                  </NavLink>
+                )
+              )}
             </nav>
+
             <LocationButton onClick={close} />
           </div>
         </div>

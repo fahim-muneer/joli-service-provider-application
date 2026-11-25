@@ -1,3 +1,4 @@
+
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import AdminShell from "./components/portal/AdminShell";
@@ -23,39 +24,63 @@ import ProviderProfile from "./pages/provider/Profile";
 import ProviderSchedule from "./pages/provider/Schedule";
 import ProviderServices from "./pages/provider/Services";
 
-// Three areas, one per kind of user, each with its own look (the three pages of the Figma file):
-//   1. Customer site   /...            frame: <Layout />                          login: /login
-//   2. Provider area   /provider/...   frames: <AuthFrame> (login) / <ProviderShell> (sidebar)   login: /provider/login
-//   3. Admin area      /admin/...      frames: <AuthFrame> (login) / <AdminShell> (sidebar)      login: /admin/login
-// <ProtectedRoute role="..."> is the lock: it lets only that role through.
 export default function App() {
   return (
     <Routes>
-      {/* 1. Customer site */}
+      {/* Customer portal */}
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="services" element={<Services />} />
         <Route path="services/:id" element={<ServiceDetails />} />
         <Route path="login" element={<Login portal="customer" />} />
         <Route path="register" element={<Register role="customer" />} />
-        <Route path="become-a-provider" element={<Navigate to="/provider/register" replace />} />
+        <Route
+          path="become-a-provider"
+          element={<Navigate to="/provider/register" replace />}
+        />
+
         <Route element={<ProtectedRoute role="customer" />}>
-          <Route path="verify-phone" element={<VerifyPhone role="customer" />} />
-          <Route path="bookings" element={<ComingSoon title="My Bookings" note="Your bookings will appear here." />} />
-          <Route path="account" element={<ComingSoon title="My Account" note="Profile and addresses arrive in Week 3." />} />
+          <Route
+            path="verify-phone"
+            element={<VerifyPhone role="customer" />}
+          />
+          <Route
+            path="bookings"
+            element={
+              <ComingSoon
+                title="My Bookings"
+                note="Your bookings will appear here."
+              />
+            }
+          />
+          <Route
+            path="account"
+            element={
+              <ComingSoon
+                title="My Account"
+                note="Profile and addresses arrive in Week 3."
+              />
+            }
+          />
         </Route>
+
         <Route path="*" element={<NotFound />} />
       </Route>
 
-      {/* 2. Provider area */}
+      {/* Provider portal */}
       <Route path="provider">
         <Route element={<AuthFrame portal="provider" />}>
           <Route path="login" element={<Login portal="provider" />} />
           <Route path="register" element={<Register role="provider" />} />
+
           <Route element={<ProtectedRoute role="provider" />}>
-            <Route path="verify-phone" element={<VerifyPhone role="provider" />} />
+            <Route
+              path="verify-phone"
+              element={<VerifyPhone role="provider" />}
+            />
           </Route>
         </Route>
+
         <Route element={<ProtectedRoute role="provider" />}>
           <Route element={<ProviderShell />}>
             <Route index element={<ProviderOverview />} />
@@ -64,33 +89,125 @@ export default function App() {
             <Route path="areas" element={<ProviderAreas />} />
             <Route path="documents" element={<ProviderDocuments />} />
             <Route path="schedule" element={<ProviderSchedule />} />
-            <Route path="requests" element={<PortalSoon note="Booking requests will appear here once bookings are added." />} />
-            <Route path="earnings" element={<PortalSoon note="Your earnings will appear here once bookings are added." />} />
-            <Route path="notifications" element={<PortalSoon note="Notifications are coming soon." />} />
-            <Route path="payment" element={<PortalSoon note="Payment details are coming soon." />} />
+            <Route
+              path="requests"
+              element={
+                <PortalSoon note="Booking requests will appear here once bookings are added." />
+              }
+            />
+            <Route
+              path="earnings"
+              element={
+                <PortalSoon note="Your earnings will appear here once bookings are added." />
+              }
+            />
+            <Route
+              path="notifications"
+              element={<PortalSoon note="Notifications are coming soon." />}
+            />
+            <Route
+              path="payment"
+              element={<PortalSoon note="Payment details are coming soon." />}
+            />
           </Route>
         </Route>
       </Route>
 
-      {/* 3. Admin area (no registration: admins are created by staff) */}
+      {/* Admin portal */}
       <Route path="admin">
         <Route element={<AuthFrame portal="admin" />}>
           <Route path="login" element={<Login portal="admin" />} />
         </Route>
+
         <Route element={<ProtectedRoute role="admin" />}>
           <Route element={<AdminShell />}>
             <Route index element={<AdminDashboard />} />
             <Route path="providers" element={<AdminProviders />} />
-            <Route path="providers/:id" element={<AdminProviderDetail />} />
-            <Route path="customers" element={<PortalSoon heading="Customers" note="Customer management is coming soon." />} />
-            <Route path="categories" element={<PortalSoon heading="Categories" note="Category management is coming soon." />} />
-            <Route path="services" element={<PortalSoon heading="Services" note="Service management is coming soon." />} />
-            <Route path="areas" element={<PortalSoon heading="Areas" note="Area management is coming soon." />} />
-            <Route path="bookings" element={<PortalSoon heading="Bookings" note="Bookings are coming soon." />} />
-            <Route path="reviews" element={<PortalSoon heading="Reviews & Ratings" note="Reviews are coming soon." />} />
-            <Route path="payments" element={<PortalSoon heading="Collections & Payouts" note="Payouts are coming soon." />} />
-            <Route path="notifications" element={<PortalSoon heading="Notifications" note="Notifications are coming soon." />} />
-            <Route path="settings" element={<PortalSoon heading="Settings" note="Settings are coming soon." />} />
+            <Route
+              path="providers/:id"
+              element={<AdminProviderDetail />}
+            />
+            <Route
+              path="customers"
+              element={
+                <PortalSoon
+                  heading="Customers"
+                  note="Customer management is coming soon."
+                />
+              }
+            />
+            <Route
+              path="categories"
+              element={
+                <PortalSoon
+                  heading="Categories"
+                  note="Category management is coming soon."
+                />
+              }
+            />
+            <Route
+              path="services"
+              element={
+                <PortalSoon
+                  heading="Services"
+                  note="Service management is coming soon."
+                />
+              }
+            />
+            <Route
+              path="areas"
+              element={
+                <PortalSoon
+                  heading="Areas"
+                  note="Area management is coming soon."
+                />
+              }
+            />
+            <Route
+              path="bookings"
+              element={
+                <PortalSoon
+                  heading="Bookings"
+                  note="Bookings are coming soon."
+                />
+              }
+            />
+            <Route
+              path="reviews"
+              element={
+                <PortalSoon
+                  heading="Reviews & Ratings"
+                  note="Reviews are coming soon."
+                />
+              }
+            />
+            <Route
+              path="payments"
+              element={
+                <PortalSoon
+                  heading="Collections & Payouts"
+                  note="Payouts are coming soon."
+                />
+              }
+            />
+            <Route
+              path="notifications"
+              element={
+                <PortalSoon
+                  heading="Notifications"
+                  note="Notifications are coming soon."
+                />
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <PortalSoon
+                  heading="Settings"
+                  note="Settings are coming soon."
+                />
+              }
+            />
           </Route>
         </Route>
       </Route>

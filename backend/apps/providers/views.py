@@ -1,7 +1,8 @@
 from django.http import FileResponse, Http404
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,6 +13,11 @@ from . import selectors, services
 from .models import ProviderDocument, ProviderProfile
 from .serializers import (
     AdminProviderDetailSerializer,
+    AvailabilityCreateSerializer,
+    AvailabilityUpdateSerializer,
+    AvailabilityWindowSerializer,
+    OnlineToggleSerializer,
+    PublicProviderSerializer,
     AdminProviderDocumentSerializer,
     AdminProviderListSerializer,
     DocumentReviewSerializer,
@@ -171,6 +177,90 @@ class ProviderAreasView(_ProviderView):
         profile = self.get_profile()
         services.replace_areas(profile=profile, area_ids=serializer.validated_data["areas"])
         return self._response(profile)
+
+
+class ProviderOnlineView(_ProviderView):
+    """GET the online switch; PATCH {"is_available": true|false} flips it.
+    Only approved providers can go online; anyone can go offline."""
+
+    def _state(self, profile):
+        return Response(
+            {"is_available": profile.is_available, "approval_status": profile.approval_status}
+        )
+
+    def get(self, request):
+        return self._state(self.get_profile())
+
+    def patch(self, request):
+        serializer = OnlineToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile = services.set_online(
+            profile=self.get_profile(), online=serializer.validated_data["is_available"]
+        )
+        return self._state(profile)
+
+
+def _date_param(request, name):
+    raw = request.query_params.get(name)
+    if not raw:
+        return None
+    try:
+        return serializers.DateField().to_internal_value(raw)
+    except serializers.ValidationError:
+        raise ValidationError({name: "Use the format YYYY-MM-DD."})
+
+
+class ProviderScheduleListCreateView(_ProviderView):
+    """GET ?from=YYYY-MM-DD&to=YYYY-MM-DD (default: today onward).
+    POST {"date"|"dates", "start_time", "end_time", "is_available"} adds windows."""
+
+    def get(self, request):
+        windows = selectors.list_windows(
+            self.get_profile(), date_from=_date_param(request, "from"), date_to=_date_param(request, "to")
+        )
+        return Response(AvailabilityWindowSerializer(windows, many=True).data)
+
+    def post(self, request):
+        serializer = AvailabilityCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        windows = services.add_windows(profile=self.get_profile(), **serializer.validated_data)
+        return Response(
+            AvailabilityWindowSerializer(windows, many=True).data, status=status.HTTP_201_CREATED
+        )
+
+
+class ProviderScheduleDetailView(_ProviderView):
+    def get_window(self):
+        window = selectors.get_window(self.get_profile(), self.kwargs["pk"])
+        if window is None:
+            raise NotFound("Window not found.")
+        return window
+
+    def get(self, request, pk):
+        return Response(AvailabilityWindowSerializer(self.get_window()).data)
+
+    def patch(self, request, pk):
+        serializer = AvailabilityUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        window = services.update_window(window=self.get_window(), **serializer.validated_data)
+        return Response(AvailabilityWindowSerializer(window).data)
+
+    def delete(self, request, pk):
+        services.delete_window(window=self.get_window())
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PublicProviderDetailView(APIView):
+    """A provider's public page (approved providers only): services, prices, areas. No contact details."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, pk):
+        provider = selectors.get_public_provider(pk)
+        if provider is None:
+            raise NotFound("Provider not found.")
+        return Response(PublicProviderSerializer(provider).data)
 
 
 # =========================== admin portal ===========================
