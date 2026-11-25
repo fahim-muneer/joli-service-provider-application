@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/useAuth";
 import NavIcon from "./NavIcons";
 
 // Figma "provider" page: white sidebar, dark-blue top bar, white title bar, pale-blue content.

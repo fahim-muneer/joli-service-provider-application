@@ -1,16 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AuthContext } from "./authContext";
 import * as authApi from "../api/auth";
 import { setSessionExpiredHandler } from "../api/client";
 import { tokenStore } from "../api/tokenStore";
 
-const AuthContext = createContext(null);
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  // While we check a saved session on first load, treat the user as "unknown", not "signed out".
   const [loading, setLoading] = useState(() => tokenStore.hasSession());
 
-  // If a token refresh fails mid-session, the API client tells us and we sign the user out.
   useEffect(() => {
     setSessionExpiredHandler(() => setUser(null));
     return () => setSessionExpiredHandler(null);
@@ -19,15 +16,17 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!tokenStore.hasSession()) return undefined;
     let cancelled = false;
+
     authApi
       .getProfile()
       .then((profile) => !cancelled && setUser(profile))
       .catch((error) => {
         if (cancelled) return;
-        if (error.response?.status === 401) tokenStore.clear(); // saved session is no longer valid
+        if (error.response?.status === 401) tokenStore.clear();
         setUser(null);
       })
       .finally(() => !cancelled && setLoading(false));
+
     return () => {
       cancelled = true;
     };
@@ -47,12 +46,10 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, logout, updateUser: setUser }), [user, loading, login, logout]);
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+  const value = useMemo(
+    () => ({ user, loading, login, logout, updateUser: setUser }),
+    [user, loading, login, logout]
+  );
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used inside <AuthProvider>");
-  return context;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "../context/LocationContext";
+import { useLocation } from "../context/useLocation";
+
 import { CityIcon } from "./Icons";
 import Spinner from "./Spinner";
 import ErrorMessage from "./ErrorMessage";
@@ -18,9 +19,25 @@ export default function LocationModal() {
     if (!pickerOpen && dialog.open) dialog.close();
   }, [pickerOpen]);
 
-  const match = (city) => city.name.toLowerCase().includes(filter.trim().toLowerCase());
-  const served = useMemo(() => cities.filter((c) => servedIds.has(String(c.id)) && match(c)), [cities, servedIds, filter]);
-  const others = useMemo(() => cities.filter((c) => !servedIds.has(String(c.id)) && match(c)), [cities, servedIds, filter]);
+
+
+  const searchTerm = filter.trim().toLowerCase();
+
+const served = useMemo(
+  () => cities.filter((c) =>
+    servedIds.has(String(c.id)) &&
+    c.name.toLowerCase().includes(searchTerm)
+  ),
+  [cities, servedIds, searchTerm]
+);
+
+const others = useMemo(
+  () => cities.filter((c) =>
+    !servedIds.has(String(c.id)) &&
+    c.name.toLowerCase().includes(searchTerm)
+  ),
+  [cities, servedIds, searchTerm]
+);
 
   function choose(id) {
     selectCity(id);

@@ -18,3 +18,33 @@ export const reinstateProvider = (id, note = "") => data(api.post(`/providers/ad
 /** decision: "approved" | "rejected" (a reason is required to reject). */
 export const reviewDocument = (id, { decision, reason = "", remark = "" }) =>
   data(api.post(`/providers/admin/documents/${id}/review/`, { decision, reason, remark }));
+
+
+// ------------------------- Category management -------------------------
+
+/** Paginated category list. isActive: true | false | undefined */
+export const listAdminCategories = ({
+  search,
+  isActive,
+  page,
+  pageSize,
+} = {}) =>
+  data(
+    api.get("/services/admin/categories/", {
+      params: clean({
+        search,
+        is_active: isActive,
+        page,
+        page_size: pageSize,
+      }),
+    }),
+  );
+
+export const createCategory = (payload) =>
+  data(api.post("/services/admin/categories/", payload));
+
+export const updateCategory = (id, payload) =>
+  data(api.patch(`/services/admin/categories/${id}/`, payload));
+
+export const archiveCategory = (id) =>
+  data(api.delete(`/services/admin/categories/${id}/`));

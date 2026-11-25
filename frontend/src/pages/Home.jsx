@@ -5,7 +5,7 @@ import Img from "../components/Img";
 import { CategoryTile } from "../components/IconTile";
 import PartnerLink from "../components/PartnerLink";
 import Spinner from "../components/Spinner";
-import { useLocation } from "../context/LocationContext";
+import { useLocation } from "../context/useLocation";
 import { useCategories } from "../hooks";
 import { categoryBannerUrl } from "../utils/categories";
 

@@ -4,7 +4,7 @@ import Button from "../components/Button";
 import ErrorMessage from "../components/ErrorMessage";
 import { homeFor } from "../auth/roles";
 import { confirmPhoneCode, sendPhoneCode } from "../api/auth";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { getErrorMessage } from "../utils/errors";
 
 // The backend sets a 60 second wait between codes.

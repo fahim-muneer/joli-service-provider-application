@@ -5,7 +5,7 @@ import Button from "../components/Button";
 import ErrorMessage from "../components/ErrorMessage";
 import { CategoryTile, ServiceTile } from "../components/IconTile";
 import Spinner from "../components/Spinner";
-import { useLocation } from "../context/LocationContext";
+import { useLocation } from "../context/useLocation";
 import { useCategories } from "../hooks";
 import { getErrorMessage } from "../utils/errors";
 

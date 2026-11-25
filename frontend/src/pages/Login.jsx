@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation as useRouterLocation } from "react-router-d
 import Button from "../components/Button";
 import ErrorMessage from "../components/ErrorMessage";
 import { ROLES, homeFor } from "../auth/roles";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { getErrorMessage } from "../utils/errors";
 
 /** One login page, three doors. The route decides which one:

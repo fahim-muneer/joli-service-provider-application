@@ -4,7 +4,7 @@ import Button from "../components/Button";
 import ErrorMessage from "../components/ErrorMessage";
 import { ROLES, homeFor } from "../auth/roles";
 import * as authApi from "../api/auth";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { getErrorMessage } from "../utils/errors";
 
 // Customers and providers share this page and this form; the `role` prop picks the

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/useAuth";
 import NavIcon from "./NavIcons";
 
 // Figma "admin" page: white sidebar with WORKSPACE label, search bar and profile on a white top bar.

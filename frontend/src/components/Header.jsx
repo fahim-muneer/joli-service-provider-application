@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { PROVIDER_APP_URL } from "../config";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import AccountMenu from "./AccountMenu";
 import AnnouncementBar from "./AnnouncementBar";
 import LocationButton from "./LocationButton";

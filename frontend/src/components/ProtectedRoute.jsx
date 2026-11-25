@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation as useRouterLocation } from "react-router-dom";
 import { homeFor, loginFor } from "../auth/roles";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import Spinner from "./Spinner";
 
 /** Wrap routes that need a signed-in user of one role ("customer" | "provider" | "admin").

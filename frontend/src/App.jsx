@@ -14,6 +14,7 @@ import Register from "./pages/Register";
 import ServiceDetails from "./pages/ServiceDetails";
 import Services from "./pages/Services";
 import VerifyPhone from "./pages/VerifyPhone";
+import AdminCategories from "./pages/admin/Categories";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminProviderDetail from "./pages/admin/ProviderDetail";
 import AdminProviders from "./pages/admin/Providers";
@@ -138,12 +139,7 @@ export default function App() {
             />
             <Route
               path="categories"
-              element={
-                <PortalSoon
-                  heading="Categories"
-                  note="Category management is coming soon."
-                />
-              }
+              element={<AdminCategories />}
             />
             <Route
               path="services"

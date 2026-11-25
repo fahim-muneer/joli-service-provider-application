@@ -5,8 +5,8 @@ import { listServiceProviders } from "../api/providers";
 import Button from "../components/Button";
 import ErrorMessage from "../components/ErrorMessage";
 import Spinner from "../components/Spinner";
-import { useAuth } from "../context/AuthContext";
-import { useLocation } from "../context/LocationContext";
+import { useAuth } from "../context/useAuth";
+import { useLocation } from "../context/useLocation";
 import { getErrorMessage } from "../utils/errors";
 
 const PAGE_SIZE = 10;

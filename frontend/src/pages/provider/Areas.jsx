@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+
+import { useState } from "react";
 import { listAreas, listCities } from "../../api/catalog";
 import { listMyAreas, replaceMyAreas } from "../../api/provider";
 import Button from "../../components/Button";
@@ -8,38 +9,43 @@ import Spinner from "../../components/Spinner";
 import { useLoad } from "../../hooks";
 import { getErrorMessage } from "../../utils/errors";
 
-const asList = (data) => (Array.isArray(data) ? data : data?.results ?? []);
+const asList = (data) =>
+  Array.isArray(data) ? data : data?.results ?? [];
 
 export default function Areas() {
   const mine = useLoad(listMyAreas);
   const cities = useLoad(() => listCities().then(asList));
-  const [selected, setSelected] = useState(() => new Set()); // area ids, across ALL cities
+
+  const [selectedOverride, setSelectedOverride] = useState(null);
   const [cityId, setCityId] = useState("");
-  const [areas, setAreas] = useState([]);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (mine.data) setSelected(new Set(mine.data.map((a) => a.id)));
-  }, [mine.data]);
+  const areasRequest = useLoad(
+    () => (cityId ? listAreas(cityId).then(asList) : Promise.resolve([])),
+    [cityId]
+  );
 
-  useEffect(() => {
-    if (!cityId) {
-      setAreas([]);
-      return undefined;
-    }
-    let cancelled = false;
-    listAreas(cityId).then((d) => !cancelled && setAreas(asList(d))).catch((e) => !cancelled && setError(getErrorMessage(e)));
-    return () => { cancelled = true; };
-  }, [cityId]);
+  // Use saved provider areas initially.
+  // After the user changes selections, use their updated selection.
+  const selected =
+    selectedOverride ??
+    new Set((mine.data ?? []).map((area) => area.id));
 
   function toggle(id) {
     setSaved(false);
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+    setSelectedOverride((current) => {
+      const next = new Set(
+        current ?? (mine.data ?? []).map((area) => area.id)
+      );
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
       return next;
     });
   }
@@ -47,8 +53,12 @@ export default function Areas() {
   async function save() {
     setError("");
     setBusy(true);
+
     try {
-      mine.setData(await replaceMyAreas([...selected]));
+      const updated = await replaceMyAreas([...selected]);
+
+      mine.setData(updated);
+      setSelectedOverride(null);
       setSaved(true);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -57,41 +67,103 @@ export default function Areas() {
     }
   }
 
-  if (mine.status === "loading") return <Spinner />;
-  if (mine.status === "error") return <section className="panel"><ErrorMessage message={mine.error} onRetry={mine.reload} /></section>;
+  if (mine.status === "loading") {
+    return <Spinner />;
+  }
 
-  const names = new Map(mine.data.map((a) => [a.id, `${a.name}, ${a.city_name}`]));
+  if (mine.status === "error") {
+    return (
+      <section className="panel">
+        <ErrorMessage
+          message={mine.error}
+          onRetry={mine.reload}
+        />
+      </section>
+    );
+  }
+
+  const names = new Map(
+    (mine.data ?? []).map((area) => [
+      area.id,
+      `${area.name}, ${area.city_name}`,
+    ])
+  );
+
+  const areas = areasRequest.data ?? [];
 
   return (
     <AccountCard>
-<p className="muted">Customers in these areas can find you. {selected.size} selected.</p>
+      <p className="muted">
+        Customers in these areas can find you. {selected.size} selected.
+      </p>
 
       <div className="form">
         <label>
           City
-          <select value={cityId} onChange={(e) => setCityId(e.target.value)}>
+          <select
+            value={cityId}
+            onChange={(e) => setCityId(e.target.value)}
+          >
             <option value="">Choose a city to pick areas</option>
-            {(cities.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+
+            {(cities.data ?? []).map((city) => (
+              <option key={city.id} value={city.id}>
+                {city.name}
+              </option>
+            ))}
           </select>
         </label>
       </div>
 
+      {areasRequest.status === "loading" && cityId && <Spinner />}
+
+      {areasRequest.status === "error" && (
+        <ErrorMessage
+          message={areasRequest.error}
+          onRetry={areasRequest.reload}
+        />
+      )}
+
       {areas.length > 0 && (
         <ul className="checks">
-          {areas.map((a) => (
-            <li key={a.id}>
-              <label><input type="checkbox" checked={selected.has(a.id)} onChange={() => toggle(a.id)} /> {a.name} {a.pincode && <span className="muted">{a.pincode}</span>}</label>
+          {areas.map((area) => (
+            <li key={area.id}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={selected.has(area.id)}
+                  onChange={() => toggle(area.id)}
+                />
+                {area.name}{" "}
+                {area.pincode && (
+                  <span className="muted">{area.pincode}</span>
+                )}
+              </label>
             </li>
           ))}
         </ul>
       )}
 
       {selected.size > 0 && (
-        <p className="muted">Currently covered: {[...selected].map((id) => names.get(id) ?? `area ${id}`).join(" · ")}</p>
+        <p className="muted">
+          Currently covered:{" "}
+          {[...selected]
+            .map((id) => names.get(id) ?? `area ${id}`)
+            .join(" · ")}
+        </p>
       )}
-      {saved && <p className="notice" role="status">Saved.</p>}
+
+      {saved && (
+        <p className="notice" role="status">
+          Saved.
+        </p>
+      )}
+
       <ErrorMessage message={error} />
-      <Button disabled={busy} onClick={save}>{busy ? "Saving…" : "Save areas"}</Button>
+
+      <Button disabled={busy} onClick={save}>
+        {busy ? "Saving…" : "Save areas"}
+      </Button>
     </AccountCard>
   );
 }
