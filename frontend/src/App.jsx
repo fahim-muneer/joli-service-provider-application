@@ -18,6 +18,7 @@ import AdminCategories from "./pages/admin/Categories";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminProviderDetail from "./pages/admin/ProviderDetail";
 import AdminProviders from "./pages/admin/Providers";
+import AdminBookings from "./pages/admin/Bookings";
 import ProviderAreas from "./pages/provider/Areas";
 import ProviderDocuments from "./pages/provider/Documents";
 import ProviderOverview from "./pages/provider/Overview";
@@ -159,15 +160,7 @@ export default function App() {
                 />
               }
             />
-            <Route
-              path="bookings"
-              element={
-                <PortalSoon
-                  heading="Bookings"
-                  note="Bookings are coming soon."
-                />
-              }
-            />
+            <Route path="bookings" element={<AdminBookings />} />
             <Route
               path="reviews"
               element={

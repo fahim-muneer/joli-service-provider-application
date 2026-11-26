@@ -48,3 +48,32 @@ export const updateCategory = (id, payload) =>
 
 export const archiveCategory = (id) =>
   data(api.delete(`/services/admin/categories/${id}/`));
+
+
+// ------------------------- Booking management -------------------------
+
+/** Paginated admin booking list. */
+export const listAdminBookings = ({ status, search, page, pageSize } = {}) =>
+  data(
+    api.get("/bookings/admin/bookings/", {
+      params: clean({
+        status,
+        search,
+        page,
+        page_size: pageSize,
+      }),
+    }),
+  );
+
+/** Get complete booking details. */
+export const getAdminBooking = (id) =>
+  data(api.get(`/bookings/admin/bookings/${id}/`));
+
+/** Cancel a booking from the admin portal. */
+export const cancelAdminBooking = (id, { reason_code, note }) =>
+  data(
+    api.post(`/bookings/admin/bookings/${id}/cancel/`, {
+      reason_code,
+      note,
+    }),
+  );
