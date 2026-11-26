@@ -4,6 +4,9 @@ import secrets
 from datetime import timedelta
 from decimal import Decimal
 
+from apps.notifications.models import Notification
+from apps.notifications.services import create_notification
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -121,10 +124,39 @@ def create_booking(
 
     expires_at = now + REQUEST_TTL
     BookingRequest.objects.bulk_create(
-        [BookingRequest(booking=booking, provider_id=o.provider_id, expires_at=expires_at) for o in offers]
+        [
+            BookingRequest(
+                booking=booking,
+                provider_id=o.provider_id,
+                expires_at=expires_at,
+            )
+            for o in offers
+        ]
     )
-    _log(booking, Status.REQUESTED, by=customer, remarks=f"Booking created and offered to {len(offers)} provider(s).")
-    # TODO: notify each provider (SMS / in-app) through the notifications app, via transaction.on_commit.
+
+    _log(
+        booking,
+        Status.REQUESTED,
+        by=customer,
+        remarks=f"Booking created and offered to {len(offers)} provider(s).",
+    )
+
+    providers = ProviderProfile.objects.filter(
+        pk__in=[offer.provider_id for offer in offers]
+    ).select_related("user")
+
+    for provider in providers:
+        _notify_on_commit(
+            user=provider.user,
+            notification_type=Notification.Type.BOOKING_REQUEST,
+            title="New service request",
+            body=(
+                f"A customer requested {service.name}. "
+                "Open your provider portal to review the booking."
+            ),
+            booking=booking,
+        )
+
     return booking
 
 
@@ -138,9 +170,24 @@ def expire_stale_requests(*, booking_id=None, now=None) -> int:
         stale = stale.filter(booking_id=booking_id)
     booking_ids = list(stale.values_list("booking_id", flat=True).distinct())
     count = stale.update(status=ReqStatus.EXPIRED, responded_at=now)
-    for booking in Booking.objects.select_for_update().filter(pk__in=booking_ids, status=Status.REQUESTED):
-        if not booking.requests.filter(status=ReqStatus.OFFERED).exists():
-            _set_status(booking, Status.EXPIRED, remarks="No provider accepted in time.")
+    for booking in (Booking.objects.select_for_update().select_related("customer", "service").filter(pk__in=booking_ids, status=Status.REQUESTED)):
+            if not booking.requests.filter(status=ReqStatus.OFFERED).exists():
+                _set_status(
+                    booking,
+                    Status.EXPIRED,
+                    remarks="No provider accepted in time.",
+                )
+
+                _notify_on_commit(
+                    user=booking.customer,
+                    notification_type=Notification.Type.BOOKING_DECLINED,
+                    title="Booking request expired",
+                    body=(
+                        f"No provider accepted your {booking.service.name} booking "
+                        "in time. Please choose another time."
+                    ),
+                    booking=booking,
+                )
     return count
 
 
@@ -195,9 +242,18 @@ def accept_request(*, booking_request, provider) -> Booking:
         booking.requests.filter(status=ReqStatus.OFFERED).exclude(pk=booking_request.pk).update(
             status=ReqStatus.WITHDRAWN, responded_at=now
         )
-        # TODO: notify the customer that a provider accepted.
-        return booking
+        _notify_on_commit(
+                user=booking.customer,
+                notification_type=Notification.Type.BOOKING_ACCEPTED,
+                title="Booking accepted",
+                body=(
+                    f"Your booking for {booking.service.name} "
+                    "has been accepted by a provider."
+                ),
+                booking=booking,
+            )
 
+        return booking
 
 def decline_request(*, booking_request, provider, reason="") -> BookingRequest:
     expire_stale_requests(booking_id=booking_request.booking_id)
@@ -212,8 +268,22 @@ def decline_request(*, booking_request, provider, reason="") -> BookingRequest:
         booking_request.decline_reason = (reason or "").strip()
         booking_request.save(update_fields=["status", "responded_at", "decline_reason"])
         if not booking.requests.filter(status=ReqStatus.OFFERED).exists():
-            _set_status(booking, Status.EXPIRED, remarks="Every provider declined or did not answer.")
-            # TODO: tell the customer to pick another time.
+                _set_status(
+                    booking,
+                    Status.EXPIRED,
+                    remarks="Every provider declined or did not answer.",
+                )
+
+                _notify_on_commit(
+                    user=booking.customer,
+                    notification_type=Notification.Type.BOOKING_DECLINED,
+                    title="No provider available",
+                    body=(
+                        f"No provider is available for your {booking.service.name} "
+                        "booking. Please choose another time."
+                    ),
+                    booking=booking,
+                )
         return booking_request
 
 
@@ -268,8 +338,54 @@ def cancel_booking(*, booking, by, role, reason_code, note="") -> Booking:
             booking, Status.CANCELLED, by=by,
             remarks=f"Cancelled by the {role}: {label}." + (f" {note}" if note else "") + (" (late cancellation)" if late else ""),
         )
-        booking.requests.filter(status=ReqStatus.OFFERED).update(status=ReqStatus.WITHDRAWN, responded_at=now)
-        # TODO: notify the other party. Late-cancellation fees and provider penalties are decided with payments (Day 4).
+        booking.requests.filter(
+            status=ReqStatus.OFFERED
+        ).update(
+            status=ReqStatus.WITHDRAWN,
+            responded_at=now,
+        )
+
+        notification_body = (
+            f"Booking {booking.reference} for {booking.service_name} "
+            f"was cancelled by the {role}."
+        )
+
+        if role == "customer":
+            if booking.assigned_provider:
+                _notify_on_commit(
+                    user=booking.assigned_provider.user,
+                    notification_type=Notification.Type.BOOKING_CANCELLED,
+                    title="Booking cancelled",
+                    body=notification_body,
+                    booking=booking,
+                )
+
+        elif role == "provider":
+            _notify_on_commit(
+                user=booking.customer,
+                notification_type=Notification.Type.BOOKING_CANCELLED,
+                title="Booking cancelled",
+                body=notification_body,
+                booking=booking,
+            )
+
+        elif role == "admin":
+            _notify_on_commit(
+                user=booking.customer,
+                notification_type=Notification.Type.BOOKING_CANCELLED,
+                title="Booking cancelled by admin",
+                body=notification_body,
+                booking=booking,
+            )
+
+            if booking.assigned_provider:
+                _notify_on_commit(
+                    user=booking.assigned_provider.user,
+                    notification_type=Notification.Type.BOOKING_CANCELLED,
+                    title="Booking cancelled by admin",
+                    body=notification_body,
+                    booking=booking,
+                )
         return booking
 
 
@@ -308,8 +424,24 @@ def start_job(*, booking, provider, code) -> Booking:
         else:
             booking.started_at = now
             booking.save(update_fields=["started_at", "updated_at"])
-            _set_status(booking, Status.IN_PROGRESS, by=provider.user, remarks="Job started: the customer's code was entered.")
 
+            _set_status(
+                booking,
+                Status.IN_PROGRESS,
+                by=provider.user,
+                remarks="Job started: the customer's code was entered.",
+            )
+
+            _notify_on_commit(
+                user=booking.customer,
+                notification_type=Notification.Type.JOB_STARTED,
+                title="Service started",
+                body=(
+                    f"Your {booking.service_name} service has started. "
+                    "You can track your booking in Joli."
+                ),
+                booking=booking,
+            )
     if outcome == "no_code":
         raise ValidationError({"detail": "Ask the customer for the start code shown in their app, then try again."})
     if outcome == "wrong":
@@ -328,5 +460,45 @@ def complete_job(*, booking, provider, note="") -> Booking:
         raise ValidationError({"detail": "Only a job that has been started can be completed."})
     booking.completed_at = timezone.now()
     booking.save(update_fields=["completed_at", "updated_at"])
-    _set_status(booking, Status.COMPLETED, by=provider.user, remarks=(note or "").strip() or "Job completed by the provider.")
+    _set_status(
+                booking,
+                Status.COMPLETED,
+                by=provider.user,
+                remarks=(note or "").strip() or "Job completed by the provider.",
+            )
+
+    _notify_on_commit(
+                user=booking.customer,
+                notification_type=Notification.Type.JOB_COMPLETED,
+                title="Service completed",
+                body=(
+                    f"Your {booking.service_name} service has been completed. "
+                    "Please review your booking and payment details."
+                ),
+                booking=booking,
+            )
+
     return booking
+
+# ---------------------------------------------------------------------------
+# NOtifications
+# ---------------------------------------------------------------------------
+def _notify_on_commit(
+    *,
+    user,
+    notification_type,
+    title,
+    body,
+    booking=None,
+):
+    """Create a notification only after the current transaction commits."""
+
+    transaction.on_commit(
+        lambda: create_notification(
+            user=user,
+            notification_type=notification_type,
+            title=title,
+            body=body,
+            booking=booking,
+        )
+    )

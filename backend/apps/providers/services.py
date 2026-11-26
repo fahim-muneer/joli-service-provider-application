@@ -1,6 +1,9 @@
 """All provider writes and the approval workflow live here."""
 from datetime import timedelta
 
+from apps.notifications.models import Notification
+from apps.notifications.services import create_notification
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -50,12 +53,18 @@ def _lock(profile) -> ProviderProfile:
 
 def _transition(profile, to, *, by, reason="", note="", **fields):
     current = profile.approval_status
+
     if (current, to) not in TRANSITIONS:
-        raise ValidationError({"detail": f"A provider that is '{current}' cannot become '{to}'."})
+        raise ValidationError({
+            "detail": f"A provider that is '{current}' cannot become '{to}'."
+        })
+
     for name, value in fields.items():
         setattr(profile, name, value)
+
     profile.approval_status = to
     profile.save()
+
     ProviderStatusHistory.objects.create(
         provider=profile,
         changed_by=by,
@@ -64,9 +73,51 @@ def _transition(profile, to, *, by, reason="", note="", **fields):
         reason=reason,
         internal_note=note,
     )
-    # TODO: notify the provider (SMS/in-app) through the notifications app.
-    return profile
 
+    notification_data = None
+
+    if to == Status.APPROVED and current == Status.SUSPENDED:
+        notification_data = (
+            Notification.Type.PROVIDER_REINSTATED,
+            "Account reinstated",
+            "Your Joli provider account has been reinstated. "
+            "You can now continue providing services.",
+        )
+
+    elif to == Status.APPROVED:
+        notification_data = (
+            Notification.Type.PROVIDER_APPROVED,
+            "Account approved",
+            "Congratulations! Your Joli provider account has been approved.",
+        )
+
+    elif to == Status.REJECTED:
+        notification_data = (
+            Notification.Type.PROVIDER_REJECTED,
+            "Application rejected",
+            f"Your provider application was rejected. Reason: {reason}",
+        )
+
+    elif to == Status.SUSPENDED:
+        notification_data = (
+            Notification.Type.PROVIDER_SUSPENDED,
+            "Account suspended",
+            f"Your Joli provider account has been suspended. Reason: {reason}",
+        )
+
+    if notification_data:
+        notification_type, title, body = notification_data
+
+        transaction.on_commit(
+            lambda: create_notification(
+                user=profile.user,
+                notification_type=notification_type,
+                title=title,
+                body=body,
+            )
+        )
+
+    return profile
 
 @transaction.atomic
 def submit_for_review(*, profile, user) -> ProviderProfile:
