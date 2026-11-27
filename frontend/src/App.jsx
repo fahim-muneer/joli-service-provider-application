@@ -24,7 +24,7 @@ import ProviderOverview from "./pages/provider/Overview";
 import ProviderProfile from "./pages/provider/Profile";
 import ProviderSchedule from "./pages/provider/Schedule";
 import ProviderServices from "./pages/provider/Services";
-
+import Notifications from "./pages/portal/Notifications";
 export default function App() {
   return (
     <Routes>
@@ -44,6 +44,10 @@ export default function App() {
           <Route
             path="verify-phone"
             element={<VerifyPhone role="customer" />}
+          />
+          <Route
+            path="notifications"
+            element={<Notifications basePath="/" />}
           />
           <Route
             path="bookings"
@@ -104,7 +108,7 @@ export default function App() {
             />
             <Route
               path="notifications"
-              element={<PortalSoon note="Notifications are coming soon." />}
+              element={<Notifications basePath="/provider" />}
             />
             <Route
               path="payment"
@@ -188,12 +192,7 @@ export default function App() {
             />
             <Route
               path="notifications"
-              element={
-                <PortalSoon
-                  heading="Notifications"
-                  note="Notifications are coming soon."
-                />
-              }
+              element={<Notifications basePath="/admin" />}
             />
             <Route
               path="settings"

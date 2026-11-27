@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import NavIcon from "./NavIcons";
+import NotificationBell from "./NotificationBell";
 
 // Figma "admin" page: white sidebar with WORKSPACE label, search bar and profile on a white top bar.
 // Only "Service Providers" has a screen so far; the rest open a "coming soon" page.
@@ -50,6 +51,7 @@ export default function AdminShell() {
       <div className="shell__body">
         <header className="topbar">
           <div className="topbar__search"><NavIcon name="search" size={15} /> <span>Search bookings, people, services…</span></div>
+            <NotificationBell to="/admin/notifications" />
           <span className="topbar__avatar topbar__avatar--initials" aria-hidden="true">{initials(user.full_name)}</span>
           <span className="topbar__who"><strong>{user.full_name}</strong><small>Super Admin</small></span>
         </header>

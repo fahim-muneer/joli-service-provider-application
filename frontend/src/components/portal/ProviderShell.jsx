@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import NavIcon from "./NavIcons";
+import NotificationBell from "./NotificationBell";
 
 // Figma "provider" page: white sidebar, dark-blue top bar, white title bar, pale-blue content.
 const NAV = [
@@ -58,7 +59,7 @@ export default function ProviderShell() {
 
       <div className="shell__body">
         <header className="topbar">
-          <NavLink to="/provider/notifications" className="topbar__bell" aria-label="Notifications"><NavIcon name="bell" /></NavLink>
+        <NotificationBell to="/provider/notifications" />          
           <span className="topbar__avatar" aria-hidden="true" />
           <span className="topbar__hello">Hello, {user.full_name}</span>
         </header>

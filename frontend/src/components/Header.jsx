@@ -6,9 +6,11 @@ import AccountMenu from "./AccountMenu";
 import AnnouncementBar from "./AnnouncementBar";
 import LocationButton from "./LocationButton";
 import SearchBar from "./SearchBar";
+import NotificationBell from "./portal/NotificationBell";
 
 export default function Header() {
   const { user, loading, logout } = useAuth();
+  console.log("HEADER AUTH:", { user, loading });
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const close = () => setOpen(false);
@@ -36,13 +38,28 @@ export default function Header() {
           </button>
 
           <div id="header-panel" className={`header__panel ${open ? "is-open" : ""}`}>
+ 
             {loading ? null : user ? (
-              <AccountMenu user={user} onLogout={handleLogout} onNavigate={close} />
-            ) : (
-              <Link to="/login" className="btn btn--yellow" onClick={close}>
-                Login
-              </Link>
-            )}
+                  <>
+                    {user.role === "customer" && (
+                      <NotificationBell
+                        to="/notifications"
+                        className="notification-bell--customer"
+                      />
+                    )}
+
+                    <AccountMenu
+                      user={user}
+                      onLogout={handleLogout}
+                      onNavigate={close}
+                    />
+                  </>
+                ) : (
+                  <Link to="/login" className="btn btn--yellow" onClick={close}>
+                    Login
+                  </Link>
+                )}
+
 
             <SearchBar onSearch={close} />
 
