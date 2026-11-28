@@ -1,4 +1,3 @@
-
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import AdminShell from "./components/portal/AdminShell";
@@ -14,6 +13,8 @@ import Register from "./pages/Register";
 import ServiceDetails from "./pages/ServiceDetails";
 import Services from "./pages/Services";
 import VerifyPhone from "./pages/VerifyPhone";
+import Bookings from "./pages/Bookings";
+import BookingDetail from "./pages/BookingDetail";
 import AdminCategories from "./pages/admin/Categories";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminProviderDetail from "./pages/admin/ProviderDetail";
@@ -25,6 +26,8 @@ import ProviderOverview from "./pages/provider/Overview";
 import ProviderProfile from "./pages/provider/Profile";
 import ProviderSchedule from "./pages/provider/Schedule";
 import ProviderServices from "./pages/provider/Services";
+import ProviderRequests from "./pages/provider/Requests";
+import ProviderBookings from "./pages/provider/Bookings";
 
 export default function App() {
   return (
@@ -46,15 +49,8 @@ export default function App() {
             path="verify-phone"
             element={<VerifyPhone role="customer" />}
           />
-          <Route
-            path="bookings"
-            element={
-              <ComingSoon
-                title="My Bookings"
-                note="Your bookings will appear here."
-              />
-            }
-          />
+          <Route path="bookings" element={<Bookings />} />
+          <Route path="bookings/:id" element={<BookingDetail />} />
           <Route
             path="account"
             element={
@@ -91,12 +87,8 @@ export default function App() {
             <Route path="areas" element={<ProviderAreas />} />
             <Route path="documents" element={<ProviderDocuments />} />
             <Route path="schedule" element={<ProviderSchedule />} />
-            <Route
-              path="requests"
-              element={
-                <PortalSoon note="Booking requests will appear here once bookings are added." />
-              }
-            />
+            <Route path="requests" element={<ProviderRequests />} />
+            <Route path="bookings" element={<ProviderBookings />} />
             <Route
               path="earnings"
               element={
@@ -138,10 +130,7 @@ export default function App() {
                 />
               }
             />
-            <Route
-              path="categories"
-              element={<AdminCategories />}
-            />
+            <Route path="categories" element={<AdminCategories />} />
             <Route
               path="services"
               element={
