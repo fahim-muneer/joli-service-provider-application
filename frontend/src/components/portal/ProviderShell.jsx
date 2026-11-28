@@ -1,12 +1,13 @@
+
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 import NavIcon from "./NavIcons";
 import NotificationBell from "./NotificationBell";
 
-// Figma "provider" page: white sidebar, dark-blue top bar, white title bar, pale-blue content.
 const NAV = [
   ["/provider", "Dashboard", "home", true],
   ["/provider/requests", "Requests", "list"],
+  ["/provider/bookings", "My Bookings", "list"],
   ["/provider/schedule", "Schedule", "calendar"],
   ["/provider/earnings", "Earnings", "wallet"],
   ["/provider/notifications", "Notifications", "bell"],
@@ -16,6 +17,7 @@ const NAV = [
 
 const TITLES = [
   ["/provider/schedule", "Schedules"],
+  ["/provider/bookings", "My Bookings"],
   ["/provider/profile", "Account"],
   ["/provider/services", "Account"],
   ["/provider/areas", "Account"],
@@ -26,14 +28,20 @@ const TITLES = [
   ["/provider/payment", "Payment"],
 ];
 
-// The Account tabs share the "My profile" sidebar item.
-const ACCOUNT = ["/provider/profile", "/provider/services", "/provider/areas", "/provider/documents"];
+const ACCOUNT = [
+  "/provider/profile",
+  "/provider/services",
+  "/provider/areas",
+  "/provider/documents",
+];
 
 export default function ProviderShell() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const title = TITLES.find(([p]) => pathname.startsWith(p))?.[1] ?? "Dashboard";
+
+  const title =
+    TITLES.find(([path]) => pathname.startsWith(path))?.[1] ?? "Dashboard";
 
   async function handleLogout() {
     await logout();
@@ -44,27 +52,55 @@ export default function ProviderShell() {
     <div className="portal portal--provider shell">
       <aside className="shell__side">
         <div className="shell__logo">Joli</div>
+
         <nav className="shell__nav" aria-label="Provider menu">
           {NAV.map(([to, label, icon, end]) => {
-            const forceActive = to === "/provider/profile" && ACCOUNT.some((p) => pathname.startsWith(p));
+            const forceActive =
+              to === "/provider/profile" &&
+              ACCOUNT.some((path) => pathname.startsWith(path));
+
             return (
-              <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive || forceActive ? "is-active" : "")}>
-                <NavIcon name={icon} /> <span>{label}</span>
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                className={({ isActive }) =>
+                  isActive || forceActive ? "is-active" : ""
+                }
+              >
+                <NavIcon name={icon} />
+                <span>{label}</span>
               </NavLink>
             );
           })}
         </nav>
-        <button type="button" className="shell__logout" onClick={handleLogout}><NavIcon name="logout" /> <span>Logout</span></button>
+
+        <button
+          type="button"
+          className="shell__logout"
+          onClick={handleLogout}
+        >
+          <NavIcon name="logout" />
+          <span>Logout</span>
+        </button>
       </aside>
 
       <div className="shell__body">
         <header className="topbar">
-        <NotificationBell to="/provider/notifications" />          
+          <NotificationBell to="/provider/notifications" />
           <span className="topbar__avatar" aria-hidden="true" />
-          <span className="topbar__hello">Hello, {user.full_name}</span>
+          <span className="topbar__hello">
+            Hello, {user.full_name}
+          </span>
         </header>
-        <div className="titlebar"><h1>{title}</h1></div>
-        <main id="content" className="shell__main"><Outlet /></main>
+
+        <div className="titlebar">
+          <h1>{title}</h1>
+        </div>
+
+        <main id="content" className="shell__main">
+          <Outlet />
+        </main>
       </div>
     </div>
   );
