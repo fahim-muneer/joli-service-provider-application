@@ -207,51 +207,112 @@ def _require_open_offer(booking_request, provider, booking):
         raise ValidationError({"detail": f"This request is already {booking_request.status}."})
 
 
+
 def accept_request(*, booking_request, provider) -> Booking:
-    """Accept an offer. Exactly one provider can win: the booking row is locked, the
-    status is re-checked, and every other open offer is withdrawn in the same transaction."""
-    expire_stale_requests(booking_id=booking_request.booking_id)  # commit expiry BEFORE any check can raise
+    """Accept an offer while preventing concurrent booking conflicts."""
+    # Expire stale requests before entering the acceptance transaction.
+    expire_stale_requests(booking_id=booking_request.booking_id)
 
     with transaction.atomic():
-        booking = Booking.objects.select_for_update().select_related("service").get(pk=booking_request.booking_id)
-        booking_request = BookingRequest.objects.select_for_update().get(pk=booking_request.pk)
+        # Lock the booking so only one provider can accept this request.
+        booking = (
+            Booking.objects.select_for_update()
+            .select_related("service")
+            .get(pk=booking_request.booking_id)
+        )
+
+        booking_request = BookingRequest.objects.select_for_update().get(
+            pk=booking_request.pk
+        )
+
         _require_open_offer(booking_request, provider, booking)
 
-        if provider.approval_status != ProviderProfile.ApprovalStatus.APPROVED:
+        # Lock this provider's row to serialize their booking acceptances.
+        locked_provider = ProviderProfile.objects.select_for_update().get(
+            pk=provider.pk
+        )
+
+        if locked_provider.approval_status != ProviderProfile.ApprovalStatus.APPROVED:
             raise PermissionDenied("Your account is not approved to accept jobs.")
 
-        offer = ProviderService.objects.filter(provider=provider, service=booking.service, is_active=True).first()
-        minutes = offer.estimated_duration_minutes if offer else booking.duration_minutes
-        if not provider_selectors.is_within_availability(provider, booking.scheduled_at, minutes):
-            raise ValidationError({"detail": "You are not available at this time. Update your schedule first."})
-        if selectors.provider_conflicts(provider.pk, booking.scheduled_at, minutes, exclude_booking_id=booking.pk).exists():
-            raise ValidationError({"detail": "You already have a booking that overlaps this time."})
+        offer = ProviderService.objects.filter(
+            provider=locked_provider,
+            service=booking.service,
+            is_active=True,
+        ).first()
+
+        minutes = (
+            offer.estimated_duration_minutes
+            if offer
+            else booking.duration_minutes
+        )
+
+        # Check the provider's working and blocked schedule.
+        if not provider_selectors.is_within_availability(
+            locked_provider,
+            booking.scheduled_at,
+            minutes,
+        ):
+            raise ValidationError({
+                "detail": "You are not available at this time. Update your schedule first."
+            })
+
+        # Check for overlapping accepted or in-progress bookings.
+        if selectors.provider_conflicts(
+            locked_provider.pk,
+            booking.scheduled_at,
+            minutes,
+            exclude_booking_id=booking.pk,
+        ).exists():
+            raise ValidationError({
+                "detail": "You already have a booking that overlaps this time."
+            })
 
         now = timezone.now()
-        booking.assigned_provider = provider
+
+        booking.assigned_provider = locked_provider
         booking.accepted_at = now
-        booking.duration_minutes = minutes                      # the accepting provider's own duration
+        booking.duration_minutes = minutes
         booking.ends_at = booking.scheduled_at + timedelta(minutes=minutes)
-        booking.start_code = new_start_code()                   # the customer shows this to the provider on arrival
-        booking.save(update_fields=["assigned_provider", "accepted_at", "duration_minutes", "ends_at", "start_code", "updated_at"])
-        _set_status(booking, Status.ACCEPTED, by=provider.user, remarks="Accepted by the provider.")
+        booking.start_code = new_start_code()
+
+        booking.save(update_fields=[
+            "assigned_provider",
+            "accepted_at",
+            "duration_minutes",
+            "ends_at",
+            "start_code",
+            "updated_at",
+        ])
+
+        _set_status(
+            booking,
+            Status.ACCEPTED,
+            by=locked_provider.user,
+            remarks="Accepted by the provider.",
+        )
 
         booking_request.status = ReqStatus.ACCEPTED
         booking_request.responded_at = now
         booking_request.save(update_fields=["status", "responded_at"])
-        booking.requests.filter(status=ReqStatus.OFFERED).exclude(pk=booking_request.pk).update(
-            status=ReqStatus.WITHDRAWN, responded_at=now
+
+        # Withdraw all other providers' offers for this booking.
+        booking.requests.filter(
+            status=ReqStatus.OFFERED
+        ).exclude(pk=booking_request.pk).update(
+            status=ReqStatus.WITHDRAWN,
+            responded_at=now,
         )
         _notify_on_commit(
-                user=booking.customer,
-                notification_type=Notification.Type.BOOKING_ACCEPTED,
-                title="Booking accepted",
-                body=(
-                    f"Your booking for {booking.service.name} "
-                    "has been accepted by a provider."
-                ),
-                booking=booking,
-            )
+            user=booking.customer,
+            notification_type=Notification.Type.BOOKING_ACCEPTED,
+            title="Booking accepted",
+            body=(
+                f"Your booking for {booking.service.name} "
+                "has been accepted by a provider."
+            ),
+            booking=booking,
+        )
 
         return booking
 
