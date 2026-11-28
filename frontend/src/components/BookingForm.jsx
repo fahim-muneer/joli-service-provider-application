@@ -1,6 +1,5 @@
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { createAddress, listAddresses } from "../api/addresses";
 import { createBooking } from "../api/bookings";
 import { listAreas } from "../api/catalog";

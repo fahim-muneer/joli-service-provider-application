@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+
+import { useEffect, useState } from "react";
 import {
   cancelProviderBooking,
   completeProviderBooking,
@@ -220,15 +221,21 @@ function BookingCard({
                     pattern="[0-9]{6}"
                     value={startCode}
                     onChange={(event) =>
-                      onStartCodeChange(booking.id, event.target.value.replace(/\D/g, "").slice(0, 6))
+                      onStartCodeChange(
+                        booking.id,
+                        event.target.value.replace(/\D/g, "").slice(0, 6)
+                      )
                     }
                     placeholder="Enter 6-digit code"
                     required
                     disabled={busy}
                   />
                 </label>
-                <Button type="submit" disabled={busy || startCode.length !== 6}>
-                {busy ? "Starting…" : "Start service"}
+                <Button
+                  type="submit"
+                  disabled={busy || startCode.length !== 6}
+                >
+                  {busy ? "Starting…" : "Start service"}
                 </Button>
               </form>
             </>
@@ -314,8 +321,11 @@ function BookingCard({
               />
             </label>
 
-            <Button type="submit" disabled={busy || !cancelForm.reason_code}>
-            {busy ? "Cancelling…" : "Confirm cancellation"}
+            <Button
+              type="submit"
+              disabled={busy || !cancelForm.reason_code}
+            >
+              {busy ? "Cancelling…" : "Confirm cancellation"}
             </Button>
           </form>
         </div>
@@ -344,40 +354,58 @@ export default function ProviderBookings() {
   const [actionError, setActionError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
-  const loadBookings = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const params = { scope, page };
-      if (status) params.status = status;
-
-      const [bookingData, reasonData] = await Promise.all([
-        listProviderBookings(params),
-        getCancelReasons(),
-      ]);
-
-      const results = Array.isArray(bookingData)
-        ? bookingData
-        : bookingData?.results || [];
-
-      setBookings(results);
-      setPagination({
-        next: bookingData?.next || null,
-        previous: bookingData?.previous || null,
-        count: bookingData?.count ?? results.length,
-      });
-      setReasons(reasonData?.provider || []);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [scope, status, page, reloadKey]);
-
   useEffect(() => {
-    loadBookings();
-  }, [loadBookings]);
+    let isActive = true;
+
+    async function fetchBookings() {
+      // Defer these state updates so they don't run synchronously
+      // inside the effect.
+      await Promise.resolve();
+
+      if (!isActive) return;
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const params = { scope, page };
+        if (status) params.status = status;
+
+        const [bookingData, reasonData] = await Promise.all([
+          listProviderBookings(params),
+          getCancelReasons(),
+        ]);
+
+        if (!isActive) return;
+
+        const results = Array.isArray(bookingData)
+          ? bookingData
+          : bookingData?.results || [];
+
+        setBookings(results);
+        setPagination({
+          next: bookingData?.next || null,
+          previous: bookingData?.previous || null,
+          count: bookingData?.count ?? results.length,
+        });
+        setReasons(reasonData?.provider || []);
+      } catch (err) {
+        if (isActive) {
+          setError(getErrorMessage(err));
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchBookings();
+
+    return () => {
+      isActive = false;
+    };
+  }, [scope, status, page, reloadKey]);
 
   function updateById(setter, id, value) {
     setter((current) => ({ ...current, [id]: value }));
@@ -391,7 +419,10 @@ export default function ProviderBookings() {
       await action();
       setStartCodes((current) => ({ ...current, [id]: "" }));
       setCompletionNotes((current) => ({ ...current, [id]: "" }));
-      setCancelForms((current) => ({ ...current, [id]: { reason_code: "", note: "" } }));
+      setCancelForms((current) => ({
+        ...current,
+        [id]: { reason_code: "", note: "" },
+      }));
       setReloadKey((current) => current + 1);
     } catch (err) {
       setActionError(getErrorMessage(err));

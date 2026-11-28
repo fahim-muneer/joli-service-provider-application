@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import "../styles/bookings.css";
 import {
   cancelBooking,
@@ -79,13 +79,10 @@ function addressLines(value) {
 
 export default function BookingDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
-
   const [booking, setBooking] = useState(null);
   const [reasons, setReasons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [reasonCode, setReasonCode] = useState("");
   const [cancelNote, setCancelNote] = useState("");

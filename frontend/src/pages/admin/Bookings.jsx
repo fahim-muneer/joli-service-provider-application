@@ -10,7 +10,6 @@ import ErrorMessage from "../../components/ErrorMessage";
 import Spinner from "../../components/Spinner";
 import StatusBadge from "../../components/StatusBadge";
 import { useLoad } from "../../hooks";
-import { formatDate } from "../../utils/status";
 
 const BOOKING_STATUS = {
   requested: { label: "Requested", tone: "info" },
