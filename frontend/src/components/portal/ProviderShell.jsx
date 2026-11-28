@@ -1,5 +1,7 @@
 
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { getUnreadNotificationCount } from "../../api/notifications";
 import { useAuth } from "../../context/useAuth";
 import NavIcon from "./NavIcons";
 
@@ -38,6 +40,32 @@ export default function ProviderShell() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUnreadCount() {
+      try {
+        const data = await getUnreadNotificationCount();
+
+        if (active) {
+          setUnreadCount(data.unread_count ?? 0);
+        }
+      } catch (error) {
+        console.error("Unable to load notification count:", error);
+      }
+    }
+
+    loadUnreadCount();
+
+    const intervalId = window.setInterval(loadUnreadCount, 15000);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const title =
     TITLES.find(([path]) => pathname.startsWith(path))?.[1] ?? "Dashboard";
@@ -86,7 +114,21 @@ export default function ProviderShell() {
 
       <div className="shell__body">
         <header className="topbar">
-          <NavLink to="/provider/notifications" className="topbar__bell" aria-label="Notifications"><NavIcon name="bell" /></NavLink>
+          <NavLink
+            to="/provider/notifications"
+            className="topbar__bell"
+            aria-label={`Notifications${
+              unreadCount > 0 ? `, ${unreadCount} unread` : ""
+            }`}
+          >
+          <span style={{ fontSize: "24px", color: "#facc15" }}>🔔</span>
+          {unreadCount > 0 && (
+              <span className="topbar__bell-count">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </NavLink>
+
           <span className="topbar__avatar" aria-hidden="true" />
           <span className="topbar__hello">
             Hello, {user.full_name}

@@ -53,7 +53,41 @@
 .topbar { display: flex; align-items: center; justify-content: flex-end; gap: 0.8rem; padding: 0 1.5rem; height: 76px; }
 .portal--provider .topbar { background: #1e3a8a; color: #fff; height: 76px; }
 .portal--admin .topbar { background: #fff; border-bottom: 1px solid var(--p-border); height: 64px; }
-.topbar__bell { color: #fff; display: grid; place-items: center; margin-right: 0.4rem; }
+.topbar__bell {
+  color: #facc15; /* Yellow bell */
+  display: grid;
+  place-items: center;
+  margin-right: 0.4rem;
+}
+.topbar__bell {
+  position: relative;
+  text-decoration: none;
+}
+.topbar__bell svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  flex-shrink: 0;
+}
+.topbar__bell-count {
+  position: absolute;
+  top: -9px;
+  right: -11px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  background: #ef4444;
+  color: #f8f7f7;
+  border: 2px solid #1e3a8a;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
 .topbar__avatar { width: 40px; height: 40px; border-radius: 50%; background: #d9d9d9; }
 .topbar__avatar--initials { width: 34px; height: 34px; background: #eef1ff; color: #465ce4; font-size: 12px; font-weight: 600; display: grid; place-items: center; }
 .topbar__hello { font-weight: 700; font-size: 15px; }

@@ -28,7 +28,7 @@ import ProviderSchedule from "./pages/provider/Schedule";
 import ProviderServices from "./pages/provider/Services";
 import ProviderRequests from "./pages/provider/Requests";
 import ProviderBookings from "./pages/provider/Bookings";
-
+import ProviderNotifications from "./pages/provider/Notifications";
 export default function App() {
   return (
     <Routes>
@@ -97,7 +97,7 @@ export default function App() {
             />
             <Route
               path="notifications"
-              element={<PortalSoon note="Notifications are coming soon." />}
+              element={<ProviderNotifications />}
             />
             <Route
               path="payment"

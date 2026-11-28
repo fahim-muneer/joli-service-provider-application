@@ -4,7 +4,7 @@ const PATHS = {
   list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
   calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
   wallet: "M3 7h16a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2zM3 7V6a2 2 0 012-2h12M16 14h2",
-  bell: "M6 16V11a6 6 0 1112 0v5l2 2H4zM10 21h4",
+  bell: "M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4",
   user: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0",
   card: "M3 6h18v12H3zM3 10h18M7 15h4",
   logout: "M10 4H5v16h5M15 8l4 4-4 4M19 12H9",
